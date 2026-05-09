@@ -201,3 +201,62 @@ def show(id: int = typer.Argument(..., help="ID de l'ADR à afficher")):
         err.print(f"[red]ADR #{id:03d} introuvable.[/red]")
         raise typer.Exit(1)
     _print_adr(adr)
+
+
+@app.command()
+def index():
+    """Indexe les ADR dans sqlite-vec pour la recherche sémantique."""
+    decisions_dir = _require_dir()
+    config = load_config(decisions_dir)
+    model = config.get("embedding_model", "qwen3-embedding:0.6b")
+    with console.status(f"[dim]Indexation via {model}…[/dim]"):
+        try:
+            from .store import reindex
+            n = reindex(decisions_dir, config)
+        except Exception as exc:
+            err.print(f"[red]Erreur :[/red] {exc}")
+            raise typer.Exit(1)
+    if n == 0:
+        console.print("[yellow]Aucun ADR à indexer.[/yellow]")
+    else:
+        console.print(f"[green]✓[/green] {n} ADR indexés.")
+
+
+@app.command()
+def serve():
+    """Lance le serveur MCP (stdio) pour Claude Code / Cursor."""
+    from .server import mcp_app
+    mcp_app.run(transport="stdio")
+
+
+@app.command()
+def setup():
+    """Configure le serveur MCP dans Claude Code et Cursor (si détectés)."""
+    import json
+
+    entry = {"command": "teambrain", "args": ["serve"]}
+    configured: list[str] = []
+
+    # Claude Code — ~/.claude.json
+    claude_cfg = Path.home() / ".claude.json"
+    if claude_cfg.exists():
+        data = json.loads(claude_cfg.read_text(encoding="utf-8"))
+        data.setdefault("mcpServers", {})["teambrain"] = entry
+        claude_cfg.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+        configured.append("Claude Code (~/.claude.json)")
+
+    # Cursor — ~/.cursor/mcp.json
+    cursor_cfg = Path.home() / ".cursor" / "mcp.json"
+    if cursor_cfg.parent.exists():
+        data = json.loads(cursor_cfg.read_text(encoding="utf-8")) if cursor_cfg.exists() else {}
+        data.setdefault("mcpServers", {})["teambrain"] = entry
+        cursor_cfg.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+        configured.append("Cursor (~/.cursor/mcp.json)")
+
+    if configured:
+        for c in configured:
+            console.print(f"[green]✓[/green] {c}")
+        console.print("[dim]Redémarre le client pour activer.[/dim]")
+    else:
+        console.print("[yellow]Aucun client détecté.[/yellow] Ajoute manuellement :")
+        console.print_json(json.dumps({"mcpServers": {"teambrain": entry}}, indent=2))

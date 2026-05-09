@@ -11,6 +11,8 @@ dependencies = [
     "ollama>=0.4",
     "python-frontmatter>=1.1",
     "rich>=13",
+    "sqlite-vec>=0.1.0",
+    "mcp>=1.0.0",
 ]
 
 [project.optional-dependencies]

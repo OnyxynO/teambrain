@@ -6,4 +6,3 @@ dist/
 .decisions/*.db
 .pytest_cache/
 .coverage
-.venv/

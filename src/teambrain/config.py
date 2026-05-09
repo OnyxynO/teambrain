@@ -3,7 +3,10 @@ import json
 from pathlib import Path
 
 CONFIG_FILENAME = ".teambrain.json"
-DEFAULT_CONFIG = {"model": "qwen3:1.7b"}
+DEFAULT_CONFIG = {
+    "model": "qwen3:1.7b",
+    "embedding_model": "qwen3-embedding:0.6b",
+}
 
 
 def find_decisions_dir() -> Path | None:
