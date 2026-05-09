@@ -1,0 +1,26 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "teambrain"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = [
+    "typer[all]>=0.12",
+    "ollama>=0.4",
+    "python-frontmatter>=1.1",
+    "rich>=13",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-cov"]
+
+[project.scripts]
+teambrain = "teambrain.cli:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/teambrain"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
