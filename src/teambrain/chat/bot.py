@@ -110,11 +110,14 @@ class DecisionBot:
             return
 
         adr = self._generate_draft(qual, msg)
+        logger.info("Brouillon généré : %s", adr.titre)
         context = f"#{msg.channel} — {msg.text[:100]}"
         proposal_id = str(uuid.uuid4())
+        lead = self._config.get("lead_user_id", "")
+        logger.info("Envoi proposition DM à lead_user_id=%r", lead)
 
         message_ts = self._adapter.send_proposal(
-            self._config.get("lead_user_id", ""),
+            lead,
             {
                 "titre": adr.titre,
                 "contexte": adr.contexte,
@@ -125,6 +128,7 @@ class DecisionBot:
             proposal_id,
         )
 
+        logger.info("Proposition envoyée (ts=%s) — en attente de validation", message_ts)
         self._pending[proposal_id] = PendingProposal(proposal_id, message_ts, adr)
 
     def _generate_draft(self, qual: dict, msg: Message) -> ADR:
