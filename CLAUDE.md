@@ -42,7 +42,7 @@ tests/
 ├── test_store.py     # 6 tests (embeddings mockés)
 ├── test_server.py    # 13 tests (résolution chemin → modules)
 ├── test_bot.py       # 15 tests (patterns, scoring, orchestration)
-└── test_scanner.py   # 22 tests (Module 4 : _depuis_vers_git, score_candidat, scanner_commits, scanner_code)
+└── test_scanner.py   # 23 tests (Module 4 : _depuis_vers_git, score_candidat, scanner_commits, scanner_code, patterns_extra)
 ```
 
 ## Commandes dev
@@ -53,7 +53,7 @@ pip install -e ".[dev]"        # core + dev deps
 pip install -e ".[bot]"        # core + slack-sdk + PyGithub (pour Module 3)
 
 # Tests
-pytest                         # 73 tests
+pytest                         # 74 tests
 
 # CLI
 teambrain init                 # crée .decisions/ dans le repo courant
@@ -68,12 +68,13 @@ teambrain setup slack          # wizard configuration Slack (2 étapes)
 teambrain bot                  # lance le chat bot Slack
 teambrain bot --check          # vérifie la config sans lancer le bot
 teambrain bot --confidence 0.7 # seuil de confiance personnalisé
-teambrain scan-commits         # scanne les commits git récents (défaut : 1 semaine)
+teambrain scan-commits                          # scanne les commits git récents (défaut : 1 semaine)
 teambrain scan-commits --depuis 3m --confiance 0.8  # période et seuil personnalisés
-teambrain scan-commits --no-ai # retourne les matchs bruts sans scoring Ollama
-teambrain scan-code            # scanne les commentaires du code (marqueurs DECISION:, ADR:)
-teambrain scan-code --pattern "CHOIX_ARCHI:" # pattern supplémentaire (répétable)
-teambrain scan-code --no-ai   # retourne les matchs bruts sans scoring Ollama
+teambrain scan-commits --no-ai                  # matchs bruts sans scoring Ollama
+teambrain scan-commits --pattern "migrer"       # pattern supplémentaire (répétable, supporte regex)
+teambrain scan-code                             # scanne les commentaires du code (marqueurs DECISION:, ADR:)
+teambrain scan-code --pattern "CHOIX_ARCHI:"   # pattern supplémentaire (répétable)
+teambrain scan-code --no-ai                     # matchs bruts sans scoring Ollama
 ```
 
 ## État des modules
@@ -162,9 +163,10 @@ Logique de matching (ordre de priorité) :
 
 `scanner.py` expose deux fonctions principales utilisées par les commandes CLI :
 
-- `scanner_commits(chemin_repo, depuis, model, confiance_min, score_ia=True)` : git log via subprocess, filtrage regex sur les patterns décisionnels, scoring Ollama optionnel
+- `scanner_commits(chemin_repo, depuis, model, confiance_min, score_ia=True, patterns_extra=None)` : git log via subprocess, filtrage sur les patterns décisionnels, scoring Ollama optionnel
 - `scanner_code(chemin_repo, patterns_extra, model, confiance_min, score_ia=True)` : rglob sur tous les fichiers texte, skip binaires + DOSSIERS_IGNORES, scoring Ollama optionnel
 - `score_candidat(texte, model)` : appel Ollama, gère le wrapping ```json```, normalise les types
+- `_match_patterns(texte, patterns)` : matching regex via `re.search()` avec fallback sous-chaîne si pattern invalide
 
 Le paramètre `score_ia=False` retourne les candidats bruts (confiance=1.0, resume="") sans appeler Ollama — utilisé par `--no-ai`.
 
@@ -179,6 +181,33 @@ Commits : `"on a décidé"`, `"on va partir sur"`, `"on abandonne"`, `"décision
 Code : `"DECISION:"`, `"ADR:"`, `"# decision"`, `"// decision"`
 
 Dossiers ignorés : `.git`, `node_modules`, `__pycache__`, `.venv`, `venv`, `.tox`, `dist`, `build`
+
+### Patterns personnalisés par repo
+
+Les commandes `scan-commits` et `scan-code` fusionnent les patterns par défaut avec :
+1. Les options `--pattern` passées en ligne de commande
+2. Les champs `commit_patterns` et `code_patterns` dans `.decisions/.teambrain.json`
+
+Les patterns supportent la **regex** (`re.search`, insensible à la casse) — fallback sous-chaîne si le pattern est invalide.
+
+Exemple pour un repo style Conventional Commits français (ex: SAND) :
+
+```json
+{
+  "commit_patterns": [
+    "migrer",
+    "remplacer .+ par",
+    "upgrade|upgrader",
+    "intégrer",
+    "architecture",
+    "forcer .+ via",
+    "postgres|redis|sentry|docker|ltree"
+  ],
+  "code_patterns": [
+    "CHOIX_ARCHI:"
+  ]
+}
+```
 
 ## Pièges connus
 
@@ -202,3 +231,5 @@ Dossiers ignorés : `.git`, `node_modules`, `__pycache__`, `.venv`, `venv`, `.to
 - `scanner_commits` ne scanne que le sujet du commit (`%s`), pas le corps (`%b`). Les décisions dans le corps du message sont manquées. À étendre si besoin.
 - `score_candidat` lève `ValueError` sur JSON malformé — absorbé avec `logger.warning` dans les scanners. Surveiller les logs si le nombre de candidats semble anormalement bas.
 - `scanner_code` en mode `score_ia=True` peut être lent sur de gros repos (1 appel Ollama par ligne matchant). Utiliser `--no-ai` pour un premier balayage rapide, puis scorer manuellement.
+- Les patterns par défaut (`PATTERNS_COMMIT`) sont des sous-chaînes simples ("on a décidé"…) — ils ne matchent pas les styles Conventional Commits ("migrer", "remplacer"). Configurer `commit_patterns` dans `.teambrain.json` selon le style du repo cible.
+- Les patterns dans `commit_patterns` et `--pattern` supportent regex (`re.search`) : `"postgres|redis"` fonctionne, pas besoin de deux entrées séparées.
