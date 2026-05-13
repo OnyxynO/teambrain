@@ -50,8 +50,39 @@ teambrain setup            # configure Claude Code + Cursor
 
 - **Module 1** : ✅ CLI + format ADR + add (Ollama) + search texte
 - **Module 2** : ✅ MCP server + sqlite-vec + mapping chemin→modules
-- **Module 3** : à venir — Slack bot (capture automatique)
+- **Module 3** : à venir — Chat bot multi-plateforme (Slack, Teams, Discord, Mattermost)
 - **Module 4** : à venir (optionnel) — Git/Code mining avec filtrage IA
+
+## Architecture Module 3 (à venir)
+
+### ChatPlatformAdapter — Architecture pluggable
+
+Module 3 utilise une abstraction `ChatPlatformAdapter` pour supporter plusieurs plateformes de chat :
+
+```
+src/teambrain/chat/
+├── base.py              # Interface ChatPlatformAdapter
+├── adapters/
+│   ├── slack.py         # SlackAdapter (livré avec Module 3)
+│   ├── teams.py         # TeamsAdapter (extension optionnelle)
+│   ├── discord.py       # DiscordAdapter (extension optionnelle)
+│   └── mattermost.py    # MattermostAdapter (extension optionnelle)
+└── bot.py               # Logique commune (detection, generation, validation)
+```
+
+**Config** dans `.decisions/.teambrain.json` :
+```json
+{
+  "chat": {
+    "platform": "slack",
+    "channels": ["#architecture", "#decisions"],
+    "token_env": "SLACK_BOT_TOKEN"
+  }
+}
+```
+
+Premiers supports : `"slack"` (défaut)
+Extensions futures : `"teams"`, `"discord"`, `"mattermost"`
 
 ## Configuration avancée
 
