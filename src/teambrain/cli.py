@@ -301,15 +301,19 @@ def _setup_slack() -> None:
                 "2. [bold]Socket Mode[/bold]  Settings > Socket Mode\n"
                 "   → Activer · générer un App-Level Token avec scope [cyan]connections:write[/cyan]\n\n"
                 "3. [bold]Scopes OAuth[/bold]  OAuth & Permissions > Bot Token Scopes\n"
-                "   → [cyan]channels:history  groups:history  im:history[/cyan]\n"
-                "   → [cyan]chat:write  im:write  users:read[/cyan]\n\n"
+                "   → [cyan]channels:read  channels:history[/cyan]\n"
+                "   → [cyan]groups:read  groups:history[/cyan]\n"
+                "   → [cyan]im:history  chat:write  im:write  users:read[/cyan]\n\n"
                 "4. [bold]Event Subscriptions[/bold]  Features > Event Subscriptions\n"
                 "   → Activer · Subscribe to Bot Events :\n"
                 "   → [cyan]message.channels[/cyan]  [cyan]message.groups[/cyan]\n\n"
                 "5. [bold]Interactivity[/bold]  Features > Interactivity & Shortcuts\n"
                 "   → Activer (pas d'URL requise en Socket Mode)\n\n"
                 "6. [bold]Installer[/bold]  OAuth & Permissions > Install to Workspace\n"
-                "   → Autorise l'app et copie le [bold]Bot User OAuth Token[/bold] ([cyan]xoxb-...[/cyan])",
+                "   → Autorise l'app et copie le [bold]Bot User OAuth Token[/bold] ([cyan]xoxb-...[/cyan])\n\n"
+                "7. [bold]Inviter le bot dans tes canaux[/bold]\n"
+                "   → Dans chaque canal à surveiller, tape : [cyan]/invite @NomDeTonBot[/cyan]\n"
+                "   [dim](Sans invitation, le bot ne reçoit pas les messages même avec les bons scopes.)[/dim]",
                 border_style="yellow",
             )
         )
@@ -391,10 +395,62 @@ def _setup_slack() -> None:
     )
 
 
+def _check_slack(bot_token: str, lead_id: str | None, channels: list[str]) -> None:
+    """Vérifie la configuration Slack sans lancer le bot."""
+    try:
+        from slack_sdk import WebClient
+    except ImportError:
+        err.print("[red]slack-sdk non installé.[/red] Lance : pip install -e '.[bot]'")
+        raise typer.Exit(1)
+
+    client = WebClient(token=bot_token)
+    ok = True
+
+    # 1. Authentification
+    try:
+        auth = client.auth_test()
+        console.print(f"[green]✓[/green] Token valide — bot [bold]{auth['bot_id']}[/bold] sur workspace [bold]{auth['team']}[/bold]")
+    except Exception as e:
+        console.print(f"[red]✗[/red] Token invalide : {e}")
+        raise typer.Exit(1)
+
+    # 2. Canaux configurés
+    if not channels:
+        console.print("[red]✗[/red] Aucun canal configuré dans .decisions/.teambrain.json")
+        ok = False
+    else:
+        console.print(f"[green]✓[/green] Canaux configurés : {', '.join(channels)}")
+        console.print(
+            "[yellow]![/yellow] Vérifie que le bot est invité dans chaque canal :\n"
+            + "\n".join(f"   [dim]Dans {c} → tape[/dim] [cyan]/invite @{auth.get('user', 'TeamBrain')}[/cyan]" for c in channels)
+        )
+
+    # 3. DM test au lead
+    if lead_id:
+        try:
+            client.chat_postMessage(
+                channel=lead_id,
+                text="[TeamBrain] Vérification de configuration — tout est opérationnel. ✓",
+            )
+            console.print(f"[green]✓[/green] DM envoyé à {lead_id} — la messagerie fonctionne")
+        except Exception as e:
+            console.print(f"[red]✗[/red] Impossible d'envoyer un DM à {lead_id} : {e}")
+            ok = False
+    else:
+        console.print("[yellow]![/yellow] TEAMBRAIN_LEAD non défini — le bot ne pourra pas envoyer de DM")
+        ok = False
+
+    if ok:
+        console.print("\n[green]Configuration OK.[/green] Lance [bold]teambrain bot[/bold] pour démarrer.")
+    else:
+        console.print("\n[yellow]Problèmes détectés.[/yellow] Corrige-les avant de lancer le bot.")
+
+
 @app.command()
 def bot(
     platform: str = typer.Option("slack", "--platform", "-p", help="Plateforme de chat"),
     confidence: float = typer.Option(0.7, "--confidence", "-c", help="Seuil de confiance IA (0-1)"),
+    check: bool = typer.Option(False, "--check", help="Vérifier la configuration sans lancer le bot"),
 ):
     """Lance le Chat Bot pour détecter les décisions dans les canaux.
 
@@ -445,6 +501,10 @@ def bot(
         raise typer.Exit(1)
 
     config["lead_user_id"] = lead_id
+
+    if check:
+        _check_slack(bot_token, lead_id, channels)
+        return
 
     adapter = SlackAdapter(bot_token, app_token)
 
