@@ -16,6 +16,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+slack = ["slack-sdk>=3.30"]
+github = ["PyGithub>=2.0"]
+bot = ["slack-sdk>=3.30", "PyGithub>=2.0"]
 dev = ["pytest>=8", "pytest-cov"]
 
 [project.scripts]

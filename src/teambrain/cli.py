@@ -260,3 +260,73 @@ def setup():
     else:
         console.print("[yellow]Aucun client détecté.[/yellow] Ajoute manuellement :")
         console.print_json(json.dumps({"mcpServers": {"teambrain": entry}}, indent=2))
+
+
+@app.command()
+def bot(
+    platform: str = typer.Option("slack", "--platform", "-p", help="Plateforme de chat"),
+    confidence: float = typer.Option(0.7, "--confidence", "-c", help="Seuil de confiance IA (0-1)"),
+):
+    """Lance le Chat Bot pour détecter les décisions dans les canaux.
+
+    Variables d'env requises pour Slack :
+    - SLACK_BOT_TOKEN (xoxb-...)
+    - SLACK_APP_TOKEN (xapp-...)
+    - TEAMBRAIN_LEAD (ID utilisateur pour les DM)
+
+    Pour GitHub (création PR optionnelle) :
+    - GITHUB_TOKEN (ghp-...)
+    - GITHUB_REPO (owner/repo)
+    """
+    import os
+    from .chat import DecisionBot
+    from .chat.adapters import SlackAdapter
+
+    decisions_dir = _require_dir()
+    config = load_config(decisions_dir)
+    config["confidence_threshold"] = confidence
+
+    if platform.lower() != "slack":
+        err.print(f"[red]Plateforme '{platform}' non supportée.[/red]")
+        err.print("[dim]Plateforme supportée : slack[/dim]")
+        raise typer.Exit(1)
+
+    bot_token = os.getenv(config["chat"].get("bot_token_env", "SLACK_BOT_TOKEN"))
+    app_token = os.getenv(config["chat"].get("app_token_env", "SLACK_APP_TOKEN"))
+    lead_id = os.getenv(config["chat"].get("lead_user_id_env", "TEAMBRAIN_LEAD"))
+    channels = config["chat"].get("channels", [])
+
+    if not bot_token or not app_token:
+        err.print("[red]Tokens Slack manquants.[/red]")
+        err.print(f"[dim]Définis {config['chat'].get('bot_token_env')} et {config['chat'].get('app_token_env')}[/dim]")
+        raise typer.Exit(1)
+
+    if not channels:
+        err.print("[yellow]Aucun canal configuré.[/yellow]")
+        err.print("[dim]Ajoute des canaux dans .decisions/.teambrain.json → chat.channels[/dim]")
+        raise typer.Exit(1)
+
+    config["lead_user_id"] = lead_id
+
+    adapter = SlackAdapter(bot_token, app_token)
+
+    github_creator = None
+    github_token = os.getenv(config["github"].get("token_env"))
+    github_repo = os.getenv(config["github"].get("repo_env"))
+    if github_token and github_repo:
+        try:
+            from .chat.github import GitHubPRCreator
+            github_creator = GitHubPRCreator(github_token, github_repo)
+        except ImportError:
+            err.print("[yellow]PyGithub non installé. Installe avec : pip install -e '.[bot]'[/yellow]")
+
+    try:
+        console.print(f"[green]▶[/green] TeamBrain bot démarré sur Slack (confiance : {confidence})")
+        console.print(f"[dim]Canaux : {', '.join(channels)}[/dim]")
+        bot_instance = DecisionBot(adapter, decisions_dir, config, github_creator)
+        bot_instance.run(channels)
+    except KeyboardInterrupt:
+        console.print("[yellow]Bot arrêté.[/yellow]")
+    except Exception as exc:
+        err.print(f"[red]Erreur :[/red] {exc}")
+        raise typer.Exit(1)

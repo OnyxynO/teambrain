@@ -7,6 +7,18 @@ DEFAULT_CONFIG = {
     "model": "qwen3:1.7b",
     "embedding_model": "qwen3-embedding:0.6b",
     "module_mappings": {},
+    "chat": {
+        "platform": "slack",
+        "channels": [],
+        "bot_token_env": "SLACK_BOT_TOKEN",
+        "app_token_env": "SLACK_APP_TOKEN",
+        "lead_user_id_env": "TEAMBRAIN_LEAD",
+        "confidence_threshold": 0.7,
+    },
+    "github": {
+        "token_env": "GITHUB_TOKEN",
+        "repo_env": "GITHUB_REPO",
+    },
 }
 
 
