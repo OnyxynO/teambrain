@@ -449,6 +449,15 @@ def bot(
     from .chat import DecisionBot
     from .chat.adapters import SlackAdapter
 
+    # Charger .env.teambrain automatiquement s'il existe
+    env_file = Path.cwd() / ".env.teambrain"
+    if env_file.exists():
+        for line in env_file.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                key, _, value = line.partition("=")
+                os.environ.setdefault(key.strip(), value.strip())
+
     decisions_dir = _require_dir()
     config = load_config(decisions_dir)
     config["confidence_threshold"] = confidence
