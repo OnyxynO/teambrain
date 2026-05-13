@@ -49,8 +49,9 @@ teambrain setup            # configure Claude Code + Cursor
 ## État des modules
 
 - **Module 1** : ✅ CLI + format ADR + add (Ollama) + search texte
-- **Module 2** : ✅ MCP server + sqlite-vec + auto-config clients
+- **Module 2** : ✅ MCP server + sqlite-vec + mapping chemin→modules
 - **Module 3** : à venir — Slack bot (capture automatique)
+- **Module 4** : à venir (optionnel) — Git/Code mining avec filtrage IA
 
 ## Configuration avancée
 
