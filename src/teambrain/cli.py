@@ -279,102 +279,65 @@ def _setup_mcp() -> None:
 
 
 def _setup_slack() -> None:
-    """Wizard interactif de configuration Slack pour le Chat Bot."""
+    """Wizard de configuration Slack — 2 étapes."""
     import json
 
     console.print(
         Panel(
             "[bold]Configuration Slack — TeamBrain Chat Bot[/bold]\n"
-            "[dim]Ce wizard te guide pour créer et configurer une app Slack.\n"
-            "Appuie sur Ctrl+C à tout moment pour annuler.[/dim]",
+            "[dim]2 étapes : instructions de setup, puis collecte des tokens.\n"
+            "Ctrl+C à tout moment pour annuler.[/dim]",
             border_style="blue",
         )
     )
 
     try:
-        # ── Étape 1 ────────────────────────────────────────────────────────────
+        # ── Étape 1 : toutes les instructions en une fois ──────────────────────
         console.print(
             Panel(
-                "[bold]Étape 1 — Créer l'app Slack[/bold]\n\n"
-                "Ouvre l'URL suivante dans ton navigateur pour créer une nouvelle app :\n\n"
-                "  [cyan]https://api.slack.com/apps?new_app=1[/cyan]\n\n"
-                "Sélectionne [bold]« From scratch »[/bold], donne un nom (ex: TeamBrain)\n"
-                "et choisis ton workspace.",
+                "[bold]Étape 1 — Créer et configurer l'app Slack[/bold]\n\n"
+                "1. [cyan]https://api.slack.com/apps?new_app=1[/cyan]\n"
+                "   → « From scratch » · nom (ex: TeamBrain) · choisis ton workspace\n\n"
+                "2. [bold]Socket Mode[/bold]  Settings > Socket Mode\n"
+                "   → Activer · générer un App-Level Token avec scope [cyan]connections:write[/cyan]\n\n"
+                "3. [bold]Scopes OAuth[/bold]  OAuth & Permissions > Bot Token Scopes\n"
+                "   → [cyan]channels:history  groups:history  im:history[/cyan]\n"
+                "   → [cyan]chat:write  im:write  users:read[/cyan]\n\n"
+                "4. [bold]Event Subscriptions[/bold]  Features > Event Subscriptions\n"
+                "   → Activer · Subscribe to Bot Events :\n"
+                "   → [cyan]message.channels[/cyan]  [cyan]message.groups[/cyan]\n\n"
+                "5. [bold]Interactivity[/bold]  Features > Interactivity & Shortcuts\n"
+                "   → Activer (pas d'URL requise en Socket Mode)\n\n"
+                "6. [bold]Installer[/bold]  OAuth & Permissions > Install to Workspace\n"
+                "   → Autorise l'app et copie le [bold]Bot User OAuth Token[/bold] ([cyan]xoxb-...[/cyan])",
                 border_style="yellow",
             )
         )
-        typer.confirm("Étape 1 terminée ?", abort=True)
+        typer.confirm("App configurée et installée ?", abort=True)
 
-        # ── Étape 2 ────────────────────────────────────────────────────────────
-        console.print(
-            Panel(
-                "[bold]Étape 2 — Activer Socket Mode et configurer les permissions[/bold]\n\n"
-                "[bold]2a. Socket Mode[/bold]\n"
-                "  → Settings > Socket Mode → activer [bold]Enable Socket Mode[/bold]\n"
-                "  → Génère un App-Level Token avec le scope [cyan]connections:write[/cyan]\n\n"
-                "[bold]2b. OAuth Scopes (Bot Token)[/bold]\n"
-                "  → OAuth & Permissions > Scopes > Bot Token Scopes\n"
-                "  → Ajoute les scopes suivants :\n\n"
-                "     [cyan]channels:history[/cyan]   lire les messages des canaux publics\n"
-                "     [cyan]groups:history[/cyan]     lire les messages des canaux privés\n"
-                "     [cyan]im:history[/cyan]         lire les messages directs\n"
-                "     [cyan]chat:write[/cyan]         envoyer des messages\n"
-                "     [cyan]im:write[/cyan]           ouvrir des DM\n"
-                "     [cyan]users:read[/cyan]         lire les infos utilisateurs",
-                border_style="yellow",
-            )
+        # ── Étape 2 : collecte des tokens ─────────────────────────────────────
+        console.print("\n[bold]Étape 2 — Tokens et canaux[/bold]\n")
+
+        while True:
+            app_token = typer.prompt("App-Level Token (xapp-...)", hide_input=True)
+            if app_token.startswith("xapp-"):
+                break
+            console.print("[red]  Format invalide[/red] — doit commencer par [cyan]xapp-[/cyan]")
+
+        while True:
+            bot_token = typer.prompt("Bot User OAuth Token (xoxb-...)", hide_input=True)
+            if bot_token.startswith("xoxb-"):
+                break
+            console.print("[red]  Format invalide[/red] — doit commencer par [cyan]xoxb-[/cyan]")
+
+        lead_id = typer.prompt(
+            "Ton ID utilisateur Slack\n"
+            "  (Profil > ⋮ > Copier l'identifiant du membre, ex: U01XXXXXXXX)\n  ",
         )
-        typer.confirm("Étape 2 terminée ?", abort=True)
-        app_token = typer.prompt("  Colle ton SLACK_APP_TOKEN (xapp-...)", hide_input=True)
 
-        # ── Étape 3 ────────────────────────────────────────────────────────────
-        console.print(
-            Panel(
-                "[bold]Étape 3 — Activer les Event Subscriptions[/bold]\n\n"
-                "  → Event Subscriptions → activer [bold]Enable Events[/bold]\n\n"
-                "  → Subscribe to Bot Events → ajoute :\n\n"
-                "     [cyan]message.channels[/cyan]   messages dans les canaux publics\n"
-                "     [cyan]message.groups[/cyan]     messages dans les canaux privés\n\n"
-                "[dim](Pas besoin de Request URL en Socket Mode — Slack utilise le WebSocket.)[/dim]",
-                border_style="yellow",
-            )
-        )
-        typer.confirm("Étape 3 terminée ?", abort=True)
-
-        # ── Étape 4 ────────────────────────────────────────────────────────────
-        console.print(
-            Panel(
-                "[bold]Étape 4 — Activer Interactivity & Shortcuts[/bold]\n\n"
-                "  → Interactivity & Shortcuts → activer [bold]Interactivity[/bold]\n\n"
-                "[dim]En Socket Mode, aucune URL de Request URL n'est nécessaire.\n"
-                "Slack transmet les actions (boutons Block Kit) via le WebSocket.[/dim]",
-                border_style="yellow",
-            )
-        )
-        typer.confirm("Étape 4 terminée ?", abort=True)
-
-        # ── Étape 5 ────────────────────────────────────────────────────────────
-        console.print(
-            Panel(
-                "[bold]Étape 5 — Installer l'app dans le workspace[/bold]\n\n"
-                "  → OAuth & Permissions → [bold]Install to Workspace[/bold]\n"
-                "  → Autorise l'app\n"
-                "  → Copie le [bold]Bot User OAuth Token[/bold] (commence par [cyan]xoxb-...[/cyan])\n\n"
-                "Ton ID utilisateur Slack (pour recevoir les DM) :\n"
-                "  → Clique sur ton avatar > Profil > ⋮ > Copier l'identifiant du membre\n"
-                "  → Format : [cyan]U01XXXXXXXX[/cyan]",
-                border_style="yellow",
-            )
-        )
-        typer.confirm("Étape 5 terminée ?", abort=True)
-        bot_token = typer.prompt("  Colle ton SLACK_BOT_TOKEN (xoxb-...)", hide_input=True)
-        lead_id = typer.prompt("  Ton ID utilisateur Slack (ex: U01XXXXXXXX)")
-
-        # ── Canaux ────────────────────────────────────────────────────────────
-        console.print()
         canaux_str = typer.prompt(
-            "Canaux à surveiller (séparés par des virgules)",
-            default="#architecture,#decisions",
+            "Canaux à surveiller (séparés par des virgules, avec #)\n  ",
+            default="#general",
         )
 
     except typer.Abort:
@@ -406,9 +369,9 @@ def _setup_slack() -> None:
     decisions_dir = find_decisions_dir()
     if decisions_dir is not None:
         config = load_config(decisions_dir)
-        config.setdefault("chat", {})["channels"] = canaux
+        config["chat"]["channels"] = canaux
         save_config(decisions_dir, config)
-        console.print(f"[green]✓[/green] Canaux mis à jour dans .decisions/.teambrain.json : {', '.join(canaux)}")
+        console.print(f"[green]✓[/green] Canaux sauvegardés : {', '.join(canaux)}")
     else:
         console.print(
             "[yellow]Aucun .decisions/ trouvé.[/yellow] Lance [bold]teambrain init[/bold] "
@@ -419,11 +382,10 @@ def _setup_slack() -> None:
     # ── Résumé final ───────────────────────────────────────────────────────────
     console.print(
         Panel(
-            "[bold green]Configuration Slack terminée ![/bold green]\n\n"
+            "[bold green]Configuration terminée ![/bold green]\n\n"
             "Lance le bot avec :\n\n"
-            f"  [cyan]source {env_path.name}[/cyan]\n"
-            "  [cyan]teambrain bot --confidence 0.7[/cyan]\n\n"
-            "[dim]Le fichier .env.teambrain contient tes tokens — ne le commite pas.[/dim]",
+            "  [cyan]teambrain bot[/cyan]\n\n"
+            "[dim]Tokens stockés dans .env.teambrain (chargé automatiquement au démarrage).[/dim]",
             border_style="green",
         )
     )

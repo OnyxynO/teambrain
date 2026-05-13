@@ -277,7 +277,7 @@ class TestIntegrationBot:
     @patch("teambrain.chat.bot._qualify")
     @patch("teambrain.chat.bot._is_candidate")
     @patch("teambrain.chat.bot.save_adr")
-    def test_full_flow_message_to_action(self, mock_save, mock_qualify, mock_is_cand, tmp_path):
+    def test_full_flow_message_to_action(self, mock_save, mock_is_cand, mock_qualify, tmp_path):
         """Flux complet : message → proposition → action valider."""
         mock_is_cand.return_value = True
         mock_qualify.return_value = {
