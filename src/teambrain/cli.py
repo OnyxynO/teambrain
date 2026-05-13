@@ -12,6 +12,7 @@ from rich.table import Table
 from .adr import ADR, _to_markdown, from_post, list_adrs, next_id, save_adr, search_adrs
 from .ai import generate_draft
 from .config import find_decisions_dir, load_config, save_config
+from .scanner import Candidat, scanner_commits, scanner_code
 
 app = typer.Typer(no_args_is_help=True, help="TeamBrain — mémoire décisionnelle d'équipe, git-native.")
 console = Console()
@@ -535,3 +536,139 @@ def bot(
     except Exception as exc:
         err.print(f"[red]Erreur :[/red] {exc}")
         raise typer.Exit(1)
+
+
+# ──────────────────────────────────────────────────────────────
+# Module 4 — Git/Code Mining
+# ──────────────────────────────────────────────────────────────
+
+def _afficher_candidat(candidat: Candidat) -> None:
+    """Affiche un candidat dans un Panel rich."""
+    date_str = candidat.date_commit.isoformat() if candidat.date_commit else "—"
+    auteur_str = candidat.auteur or "—"
+    pourcent = int(candidat.confiance * 100)
+    couleur_conf = "green" if candidat.confiance >= 0.8 else "yellow"
+
+    content = (
+        f"[bold]{candidat.source.upper()}[/bold] · [dim]{candidat.ref}[/dim]"
+        + (f" · {date_str}" if date_str != "—" else "")
+        + (f" · {auteur_str}" if auteur_str != "—" else "")
+        + f"\n\n[italic]{candidat.texte[:300]}[/italic]"
+        + (f"\n\n[bold]Résumé :[/bold] {candidat.resume}" if candidat.resume else "")
+        + f"\n\n[{couleur_conf}]Confiance : {pourcent}%[/{couleur_conf}]"
+    )
+    console.print(Panel(content, border_style="cyan"))
+
+
+def _traiter_candidats(
+    candidats: list[Candidat],
+    decisions_dir: "Path",
+    config: dict,
+) -> int:
+    """Boucle interactive sur les candidats. Retourne le nombre d'ADR créés."""
+    nb_crees = 0
+
+    for i, candidat in enumerate(candidats, start=1):
+        console.print(f"\n[bold]Candidat {i}/{len(candidats)}[/bold]")
+        _afficher_candidat(candidat)
+
+        action = typer.prompt(
+            "Action",
+            default="i",
+            prompt_suffix=" [v]alider / [i]gnorer / [a]rrêter → ",
+        )
+
+        if action.lower().startswith("a"):
+            break
+
+        if not action.lower().startswith("v"):
+            console.print("[dim]Ignoré.[/dim]")
+            continue
+
+        # Valider → générer un ADR complet
+        adr_id = next_id(decisions_dir)
+        with console.status(f"[dim]Génération du brouillon via {config['model']}…[/dim]"):
+            try:
+                draft = generate_draft(candidat.texte, config["model"])
+            except (ValueError, ConnectionError, OSError) as exc:
+                err.print(f"[red]Erreur Ollama :[/red] {exc}")
+                console.print("[dim]ADR ignoré (erreur de génération).[/dim]")
+                continue
+
+        adr = ADR(
+            id=adr_id,
+            titre=draft.get("titre", candidat.texte[:60]),
+            date=candidat.date_commit or date.today(),
+            statut="propose",
+            modules=draft.get("modules", []),
+            decideurs=draft.get("decideurs", []),
+            contexte=draft.get("contexte", ""),
+            decision=draft.get("decision", ""),
+            consequences=draft.get("consequences", ""),
+        )
+
+        path = save_adr(adr, decisions_dir)
+        console.print(f"[green]✓[/green] ADR #{adr_id:03d} sauvegardé → {path.name}")
+        nb_crees += 1
+
+    return nb_crees
+
+
+@app.command(name="scan-commits")
+def scan_commits(
+    depuis: str = typer.Option("1w", "--depuis", help="Période à scanner : '1w', '3m', '6m', '1y' ou date ISO"),
+    confiance: float = typer.Option(0.7, "--confiance", help="Seuil de confiance IA (0-1)"),
+    no_ai: bool = typer.Option(False, "--no-ai", help="Retourner tous les matchs bruts sans scoring IA"),
+):
+    """Scanne les commits git récents pour détecter des décisions non documentées."""
+    decisions_dir = _require_dir()
+    config = load_config(decisions_dir)
+    chemin_repo = decisions_dir.parent
+
+    console.print(f"[dim]Scan des commits depuis {depuis} (confiance min : {int(confiance * 100)}%)…[/dim]")
+
+    try:
+        candidats = scanner_commits(chemin_repo, depuis, config["model"], confiance, score_ia=not no_ai)
+    except RuntimeError as exc:
+        err.print(f"[red]Erreur :[/red] {exc}")
+        raise typer.Exit(1)
+
+    if not candidats:
+        console.print("[dim]Aucun candidat trouvé.[/dim]")
+        return
+
+    console.print(f"[bold]{len(candidats)} candidat(s) détecté(s).[/bold]\n")
+    nb_crees = _traiter_candidats(candidats, decisions_dir, config)
+    console.print(
+        f"\n[bold]{len(candidats)} candidats analysés, {nb_crees} ADR créés.[/bold]"
+    )
+
+
+@app.command(name="scan-code")
+def scan_code(
+    pattern: list[str] = typer.Option([], "--pattern", "-p", help="Pattern supplémentaire à chercher (répétable)"),
+    confiance: float = typer.Option(0.8, "--confiance", help="Seuil de confiance IA (0-1)"),
+    no_ai: bool = typer.Option(False, "--no-ai", help="Retourner tous les matchs bruts sans scoring IA"),
+):
+    """Scanne les fichiers du repo pour détecter des marqueurs décisionnels dans les commentaires."""
+    decisions_dir = _require_dir()
+    config = load_config(decisions_dir)
+    chemin_repo = decisions_dir.parent
+
+    console.print(f"[dim]Scan du code (confiance min : {int(confiance * 100)}%)…[/dim]")
+
+    try:
+        candidats = scanner_code(chemin_repo, list(pattern) or None, config["model"], confiance, score_ia=not no_ai)
+    except RuntimeError as exc:
+        err.print(f"[red]Erreur :[/red] {exc}")
+        raise typer.Exit(1)
+
+    if not candidats:
+        console.print("[dim]Aucun candidat trouvé.[/dim]")
+        return
+
+    console.print(f"[bold]{len(candidats)} candidat(s) détecté(s).[/bold]\n")
+    nb_crees = _traiter_candidats(candidats, decisions_dir, config)
+    console.print(
+        f"\n[bold]{len(candidats)} candidats analysés, {nb_crees} ADR créés.[/bold]"
+    )
