@@ -176,12 +176,12 @@ class DecisionBot:
         if self._github_creator:
             pr_url = self._github_creator.create_pr(adr, self._adr_to_markdown(adr))
             self._adapter.send_dm(
-                payload.get("user_id", ""),
+                payload.get("user", {}).get("id", ""),
                 f"✅ ADR #{adr.id:03d} sauvegardée.\nPR GitHub : {pr_url}",
             )
         else:
             self._adapter.send_dm(
-                payload.get("user_id", ""),
+                payload.get("user", {}).get("id", ""),
                 f"✅ ADR #{adr.id:03d} sauvegardée (GitHub non configuré).",
             )
 
@@ -193,7 +193,7 @@ class DecisionBot:
             return
 
         self._adapter.send_dm(
-            payload.get("user_id", ""),
+            payload.get("user", {}).get("id", ""),
             f"📝 Édition de l'ADR #{proposal.adr.id:03d} — modal non encore supporté.",
         )
 
