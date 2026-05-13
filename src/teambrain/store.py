@@ -58,12 +58,14 @@ def reindex(
         db_path.unlink()
 
     db = _open_db(db_path, dim)
-    db.executemany(
-        "INSERT INTO adr_vecs(rowid, embedding) VALUES (?, ?)",
-        [(a.id, _pack(v)) for a, v in zip(adrs, vecs)],
-    )
-    db.commit()
-    db.close()
+    try:
+        db.executemany(
+            "INSERT INTO adr_vecs(rowid, embedding) VALUES (?, ?)",
+            [(a.id, _pack(v)) for a, v in zip(adrs, vecs)],
+        )
+        db.commit()
+    finally:
+        db.close()
     return len(adrs)
 
 
@@ -88,9 +90,11 @@ def search_semantic(
     sqlite_vec.load(db)
     db.enable_load_extension(False)
 
-    rows = db.execute(
-        "SELECT rowid, distance FROM adr_vecs WHERE embedding MATCH ? ORDER BY distance LIMIT ?",
-        (_pack(vec), k),
-    ).fetchall()
-    db.close()
+    try:
+        rows = db.execute(
+            "SELECT rowid, distance FROM adr_vecs WHERE embedding MATCH ? ORDER BY distance LIMIT ?",
+            (_pack(vec), k),
+        ).fetchall()
+    finally:
+        db.close()
     return [(int(r[0]), float(r[1])) for r in rows]

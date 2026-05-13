@@ -1,5 +1,6 @@
 from __future__ import annotations
 import logging
+import threading
 from slack_sdk import WebClient
 from slack_sdk.socket_mode import SocketModeClient
 from slack_sdk.socket_mode.request import SocketModeRequest
@@ -65,8 +66,10 @@ class SlackAdapter(ChatPlatformAdapter):
         self.socket_client.socket_mode_request_listeners.append(handle_events_api)
         self.socket_client.socket_mode_request_listeners.append(handle_interactive)
 
+        stop_event = threading.Event()
         try:
             self.socket_client.connect()
+            stop_event.wait()
         except KeyboardInterrupt:
             pass
         finally:

@@ -105,6 +105,8 @@ def next_id(decisions_dir: Path) -> int:
 def search_adrs(query: str, decisions_dir: Path) -> list[tuple[ADR, float]]:
     """Recherche texte simple — Module 1. Module 2 apportera sqlite-vec."""
     words = query.lower().split()
+    if not words:
+        return []
     results = []
     for adr in list_adrs(decisions_dir):
         haystack = " ".join([

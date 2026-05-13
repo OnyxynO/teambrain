@@ -1,6 +1,6 @@
 from __future__ import annotations
 from datetime import date
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 from teambrain.adr import ADR
 from teambrain.chat.base import Message
@@ -91,11 +91,9 @@ class TestQualify:
     @patch("teambrain.chat.bot.ollama.chat")
     def test_qualify_true_decision(self, mock_chat):
         """Ollama valide une décision architecturale."""
-        mock_chat.return_value = {
-            "message": {
-                "content": '{"is_decision": true, "confidence": 0.95, "summary": "Adoption de Kubernetes"}'
-            }
-        }
+        mock_response = MagicMock()
+        mock_response.message.content = '{"is_decision": true, "confidence": 0.95, "summary": "Adoption de Kubernetes"}'
+        mock_chat.return_value = mock_response
         result = _qualify("on a décidé d'adopter Kubernetes", "test-model")
         assert result["is_decision"] is True
         assert result["confidence"] == 0.95
@@ -104,22 +102,18 @@ class TestQualify:
     @patch("teambrain.chat.bot.ollama.chat")
     def test_qualify_false_decision(self, mock_chat):
         """Ollama rejette un faux positif."""
-        mock_chat.return_value = {
-            "message": {
-                "content": '{"is_decision": false, "confidence": 0.1, "summary": "Discussion générale"}'
-            }
-        }
+        mock_response = MagicMock()
+        mock_response.message.content = '{"is_decision": false, "confidence": 0.1, "summary": "Discussion générale"}'
+        mock_chat.return_value = mock_response
         result = _qualify("on a décidé de prendre un café", "test-model")
         assert result["is_decision"] is False
 
     @patch("teambrain.chat.bot.ollama.chat")
     def test_qualify_invalid_json(self, mock_chat):
         """Gère les réponses Ollama mal formées."""
-        mock_chat.return_value = {
-            "message": {
-                "content": "réponse invalide"
-            }
-        }
+        mock_response = MagicMock()
+        mock_response.message.content = "réponse invalide"
+        mock_chat.return_value = mock_response
         result = _qualify("texte", "test-model")
         assert result["is_decision"] is False
         assert result["confidence"] == 0.0

@@ -47,7 +47,10 @@ def _qualify(text: str, model: str) -> dict:
         messages=[{"role": "user", "content": prompt}],
         stream=False,
     )
-    content = response["message"]["content"]
+    content = response.message.content.strip()
+    if content.startswith("```"):
+        lines = content.split("\n")
+        content = "\n".join(lines[1:-1])
 
     try:
         result = json.loads(content)
