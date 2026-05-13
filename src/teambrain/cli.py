@@ -230,7 +230,23 @@ def serve():
 
 
 @app.command()
-def setup():
+def setup(
+    platform: str = typer.Argument(
+        "", help="Plateforme à configurer : 'slack' pour le wizard Slack, vide pour Claude Code/Cursor"
+    ),
+):
+    """Configure TeamBrain : MCP (Claude Code/Cursor) ou wizard Slack."""
+    if platform.lower() == "slack":
+        _setup_slack()
+    elif platform == "":
+        _setup_mcp()
+    else:
+        err.print(f"[red]Plateforme inconnue : '{platform}'.[/red]")
+        err.print("[dim]Utilise [bold]teambrain setup[/bold] ou [bold]teambrain setup slack[/bold].[/dim]")
+        raise typer.Exit(1)
+
+
+def _setup_mcp() -> None:
     """Configure le serveur MCP dans Claude Code et Cursor (si détectés)."""
     import json
 
@@ -260,6 +276,161 @@ def setup():
     else:
         console.print("[yellow]Aucun client détecté.[/yellow] Ajoute manuellement :")
         console.print_json(json.dumps({"mcpServers": {"teambrain": entry}}, indent=2))
+
+
+def _setup_slack() -> None:
+    """Wizard interactif de configuration Slack pour le Chat Bot."""
+    import json
+
+    console.print(
+        Panel(
+            "[bold]Configuration Slack — TeamBrain Chat Bot[/bold]\n"
+            "[dim]Ce wizard te guide pour créer et configurer une app Slack.\n"
+            "Appuie sur Ctrl+C à tout moment pour annuler.[/dim]",
+            border_style="blue",
+        )
+    )
+
+    try:
+        # ── Étape 1 ────────────────────────────────────────────────────────────
+        console.print(
+            Panel(
+                "[bold]Étape 1 — Créer l'app Slack[/bold]\n\n"
+                "Ouvre l'URL suivante dans ton navigateur pour créer une nouvelle app :\n\n"
+                "  [cyan]https://api.slack.com/apps?new_app=1[/cyan]\n\n"
+                "Sélectionne [bold]« From scratch »[/bold], donne un nom (ex: TeamBrain)\n"
+                "et choisis ton workspace.",
+                border_style="yellow",
+            )
+        )
+        typer.confirm("Étape 1 terminée ?", abort=True)
+
+        # ── Étape 2 ────────────────────────────────────────────────────────────
+        console.print(
+            Panel(
+                "[bold]Étape 2 — Activer Socket Mode et configurer les permissions[/bold]\n\n"
+                "[bold]2a. Socket Mode[/bold]\n"
+                "  → Settings > Socket Mode → activer [bold]Enable Socket Mode[/bold]\n"
+                "  → Génère un App-Level Token avec le scope [cyan]connections:write[/cyan]\n"
+                "     (note le token [bold]xapp-...[/bold])\n\n"
+                "[bold]2b. OAuth Scopes (Bot Token)[/bold]\n"
+                "  → OAuth & Permissions > Scopes > Bot Token Scopes\n"
+                "  → Ajoute les scopes suivants :\n\n"
+                "     [cyan]channels:history[/cyan]   lire les messages des canaux publics\n"
+                "     [cyan]groups:history[/cyan]     lire les messages des canaux privés\n"
+                "     [cyan]im:history[/cyan]         lire les messages directs\n"
+                "     [cyan]chat:write[/cyan]         envoyer des messages\n"
+                "     [cyan]im:write[/cyan]           ouvrir des DM\n"
+                "     [cyan]users:read[/cyan]         lire les infos utilisateurs",
+                border_style="yellow",
+            )
+        )
+        typer.confirm("Étape 2 terminée ?", abort=True)
+
+        # ── Étape 3 ────────────────────────────────────────────────────────────
+        console.print(
+            Panel(
+                "[bold]Étape 3 — Activer les Event Subscriptions[/bold]\n\n"
+                "  → Event Subscriptions → activer [bold]Enable Events[/bold]\n\n"
+                "  → Subscribe to Bot Events → ajoute :\n\n"
+                "     [cyan]message.channels[/cyan]   messages dans les canaux publics\n"
+                "     [cyan]message.groups[/cyan]     messages dans les canaux privés\n\n"
+                "[dim](Pas besoin de Request URL en Socket Mode — Slack utilise le WebSocket.)[/dim]",
+                border_style="yellow",
+            )
+        )
+        typer.confirm("Étape 3 terminée ?", abort=True)
+
+        # ── Étape 4 ────────────────────────────────────────────────────────────
+        console.print(
+            Panel(
+                "[bold]Étape 4 — Activer Interactivity & Shortcuts[/bold]\n\n"
+                "  → Interactivity & Shortcuts → activer [bold]Interactivity[/bold]\n\n"
+                "[dim]En Socket Mode, aucune URL de Request URL n'est nécessaire.\n"
+                "Slack transmet les actions (boutons Block Kit) via le WebSocket.[/dim]",
+                border_style="yellow",
+            )
+        )
+        typer.confirm("Étape 4 terminée ?", abort=True)
+
+        # ── Étape 5 ────────────────────────────────────────────────────────────
+        console.print(
+            Panel(
+                "[bold]Étape 5 — Installer l'app dans le workspace[/bold]\n\n"
+                "  → OAuth & Permissions → [bold]Install to Workspace[/bold]\n"
+                "  → Autorise l'app\n"
+                "  → Copie le [bold]Bot User OAuth Token[/bold] (commence par [cyan]xoxb-...[/cyan])\n\n"
+                "Ton ID utilisateur Slack :\n"
+                "  → Clique sur ton avatar > Profil > ⋮ > Copier l'identifiant du membre\n"
+                "  → Format : [cyan]U01XXXXXXXX[/cyan]",
+                border_style="yellow",
+            )
+        )
+        typer.confirm("Étape 5 terminée ?", abort=True)
+
+        # ── Collecte des tokens ────────────────────────────────────────────────
+        console.print()
+        console.print("[bold]Collecte des informations de configuration[/bold]")
+        console.print()
+
+        bot_token = typer.prompt("SLACK_BOT_TOKEN (xoxb-...)", hide_input=True)
+        app_token = typer.prompt("SLACK_APP_TOKEN (xapp-...)", hide_input=True)
+        lead_id = typer.prompt("TEAMBRAIN_LEAD (ID utilisateur Slack, ex: U01XXXXXXXX)")
+        canaux_str = typer.prompt(
+            "Canaux à surveiller (séparés par des virgules)",
+            default="#architecture,#decisions",
+        )
+
+    except typer.Abort:
+        console.print("\n[yellow]Configuration annulée — aucun fichier écrit.[/yellow]")
+        raise typer.Exit(0)
+
+    # ── Écriture .env.teambrain ────────────────────────────────────────────────
+    env_path = Path.cwd() / ".env.teambrain"
+    env_content = (
+        f"SLACK_BOT_TOKEN={bot_token}\n"
+        f"SLACK_APP_TOKEN={app_token}\n"
+        f"TEAMBRAIN_LEAD={lead_id}\n"
+    )
+    env_path.write_text(env_content, encoding="utf-8")
+    console.print(f"\n[green]✓[/green] {env_path} écrit.")
+
+    gitignore = Path.cwd() / ".gitignore"
+    env_entry = ".env.teambrain\n"
+    if gitignore.exists():
+        if env_entry.strip() not in gitignore.read_text():
+            with gitignore.open("a") as f:
+                f.write("\n" + env_entry)
+    else:
+        gitignore.write_text(env_entry)
+    console.print("[green]✓[/green] .env.teambrain ajouté au .gitignore")
+
+    # ── Mise à jour .decisions/.teambrain.json ─────────────────────────────────
+    canaux = [c.strip() for c in canaux_str.split(",") if c.strip()]
+    decisions_dir = find_decisions_dir()
+    if decisions_dir is not None:
+        config = load_config(decisions_dir)
+        config.setdefault("chat", {})["channels"] = canaux
+        save_config(decisions_dir, config)
+        console.print(f"[green]✓[/green] Canaux mis à jour dans .decisions/.teambrain.json : {', '.join(canaux)}")
+    else:
+        console.print(
+            "[yellow]Aucun .decisions/ trouvé.[/yellow] Lance [bold]teambrain init[/bold] "
+            "puis reconfig les canaux dans .decisions/.teambrain.json :"
+        )
+        console.print_json(json.dumps({"chat": {"channels": canaux}}, indent=2, ensure_ascii=False))
+
+    # ── Résumé final ───────────────────────────────────────────────────────────
+    console.print(
+        Panel(
+            "[bold green]Configuration Slack terminée ![/bold green]\n\n"
+            "Lance le bot avec :\n\n"
+            f"  [cyan]source {env_path.name}[/cyan]\n"
+            "  [cyan]teambrain bot --confidence 0.7[/cyan]\n\n"
+            "[dim]Le fichier .env.teambrain contient tes tokens — ne le commite pas.[/dim]",
+            border_style="green",
+        )
+    )
 
 
 @app.command()
