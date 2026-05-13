@@ -311,8 +311,7 @@ def _setup_slack() -> None:
                 "[bold]Étape 2 — Activer Socket Mode et configurer les permissions[/bold]\n\n"
                 "[bold]2a. Socket Mode[/bold]\n"
                 "  → Settings > Socket Mode → activer [bold]Enable Socket Mode[/bold]\n"
-                "  → Génère un App-Level Token avec le scope [cyan]connections:write[/cyan]\n"
-                "     (note le token [bold]xapp-...[/bold])\n\n"
+                "  → Génère un App-Level Token avec le scope [cyan]connections:write[/cyan]\n\n"
                 "[bold]2b. OAuth Scopes (Bot Token)[/bold]\n"
                 "  → OAuth & Permissions > Scopes > Bot Token Scopes\n"
                 "  → Ajoute les scopes suivants :\n\n"
@@ -326,6 +325,7 @@ def _setup_slack() -> None:
             )
         )
         typer.confirm("Étape 2 terminée ?", abort=True)
+        app_token = typer.prompt("  Colle ton SLACK_APP_TOKEN (xapp-...)", hide_input=True)
 
         # ── Étape 3 ────────────────────────────────────────────────────────────
         console.print(
@@ -360,22 +360,18 @@ def _setup_slack() -> None:
                 "  → OAuth & Permissions → [bold]Install to Workspace[/bold]\n"
                 "  → Autorise l'app\n"
                 "  → Copie le [bold]Bot User OAuth Token[/bold] (commence par [cyan]xoxb-...[/cyan])\n\n"
-                "Ton ID utilisateur Slack :\n"
+                "Ton ID utilisateur Slack (pour recevoir les DM) :\n"
                 "  → Clique sur ton avatar > Profil > ⋮ > Copier l'identifiant du membre\n"
                 "  → Format : [cyan]U01XXXXXXXX[/cyan]",
                 border_style="yellow",
             )
         )
         typer.confirm("Étape 5 terminée ?", abort=True)
+        bot_token = typer.prompt("  Colle ton SLACK_BOT_TOKEN (xoxb-...)", hide_input=True)
+        lead_id = typer.prompt("  Ton ID utilisateur Slack (ex: U01XXXXXXXX)")
 
-        # ── Collecte des tokens ────────────────────────────────────────────────
+        # ── Canaux ────────────────────────────────────────────────────────────
         console.print()
-        console.print("[bold]Collecte des informations de configuration[/bold]")
-        console.print()
-
-        bot_token = typer.prompt("SLACK_BOT_TOKEN (xoxb-...)", hide_input=True)
-        app_token = typer.prompt("SLACK_APP_TOKEN (xapp-...)", hide_input=True)
-        lead_id = typer.prompt("TEAMBRAIN_LEAD (ID utilisateur Slack, ex: U01XXXXXXXX)")
         canaux_str = typer.prompt(
             "Canaux à surveiller (séparés par des virgules)",
             default="#architecture,#decisions",
