@@ -6,3 +6,5 @@ dist/
 .decisions/*.db
 .pytest_cache/
 .coverage
+
+.env.teambrain
