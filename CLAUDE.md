@@ -23,12 +23,13 @@ Spec complète : `../../_ideas/TeamBrain/PROPOSITION.md`
 
 ```
 src/teambrain/
-├── cli.py         # 9 commandes : init, add, list, search, show, index, serve, setup, bot
+├── cli.py         # 11 commandes : init, add, list, search, show, index, serve, setup, bot, scan-commits, scan-code
 ├── adr.py         # modèle ADR, lecture/écriture/search texte
 ├── ai.py          # génération brouillon via Ollama
 ├── store.py       # index sqlite-vec + embeddings Ollama
 ├── server.py      # FastMCP : search_decisions, get_decision, list_decisions, get_context_for_file
 ├── config.py      # .decisions/.teambrain.json
+├── scanner.py     # Module 4 — git/code mining : Candidat, score_candidat, scanner_commits, scanner_code
 └── chat/          # Module 3 — Chat bot (optionnel)
     ├── base.py         # Interface ChatPlatformAdapter + Message dataclass
     ├── bot.py          # DetectionBot : patterns + scoring Ollama + orchestration
@@ -40,7 +41,8 @@ tests/
 ├── test_adr.py       # 11 tests
 ├── test_store.py     # 6 tests (embeddings mockés)
 ├── test_server.py    # 13 tests (résolution chemin → modules)
-└── test_bot.py       # 15 tests (patterns, scoring, orchestration)
+├── test_bot.py       # 15 tests (patterns, scoring, orchestration)
+└── test_scanner.py   # 22 tests (Module 4 : _depuis_vers_git, score_candidat, scanner_commits, scanner_code)
 ```
 
 ## Commandes dev
@@ -51,7 +53,7 @@ pip install -e ".[dev]"        # core + dev deps
 pip install -e ".[bot]"        # core + slack-sdk + PyGithub (pour Module 3)
 
 # Tests
-pytest                         # 51 tests
+pytest                         # 73 tests
 
 # CLI
 teambrain init                 # crée .decisions/ dans le repo courant
@@ -66,6 +68,12 @@ teambrain setup slack          # wizard configuration Slack (2 étapes)
 teambrain bot                  # lance le chat bot Slack
 teambrain bot --check          # vérifie la config sans lancer le bot
 teambrain bot --confidence 0.7 # seuil de confiance personnalisé
+teambrain scan-commits         # scanne les commits git récents (défaut : 1 semaine)
+teambrain scan-commits --depuis 3m --confiance 0.8  # période et seuil personnalisés
+teambrain scan-commits --no-ai # retourne les matchs bruts sans scoring Ollama
+teambrain scan-code            # scanne les commentaires du code (marqueurs DECISION:, ADR:)
+teambrain scan-code --pattern "CHOIX_ARCHI:" # pattern supplémentaire (répétable)
+teambrain scan-code --no-ai   # retourne les matchs bruts sans scoring Ollama
 ```
 
 ## État des modules
@@ -73,7 +81,7 @@ teambrain bot --confidence 0.7 # seuil de confiance personnalisé
 - **Module 1** : ✅ CLI + format ADR + add (Ollama) + search texte
 - **Module 2** : ✅ MCP server + sqlite-vec + mapping chemin→modules
 - **Module 3** : ✅ Chat bot — Socket Mode Slack + Block Kit + patterns + scoring Ollama + PR GitHub
-- **Module 4** : à venir (optionnel) — Git/Code mining avec filtrage IA
+- **Module 4** : ✅ Git/Code mining — scan-commits + scan-code + scoring Ollama + boucle interactive
 
 ## Module 3 — Chat Bot
 
@@ -148,6 +156,30 @@ Logique de matching (ordre de priorité) :
 2. Fallback : segments du chemin
 3. Recherche sémantique (si aucun match)
 
+## Module 4 — Git/Code Mining
+
+### Architecture
+
+`scanner.py` expose deux fonctions principales utilisées par les commandes CLI :
+
+- `scanner_commits(chemin_repo, depuis, model, confiance_min, score_ia=True)` : git log via subprocess, filtrage regex sur les patterns décisionnels, scoring Ollama optionnel
+- `scanner_code(chemin_repo, patterns_extra, model, confiance_min, score_ia=True)` : rglob sur tous les fichiers texte, skip binaires + DOSSIERS_IGNORES, scoring Ollama optionnel
+- `score_candidat(texte, model)` : appel Ollama, gère le wrapping ```json```, normalise les types
+
+Le paramètre `score_ia=False` retourne les candidats bruts (confiance=1.0, resume="") sans appeler Ollama — utilisé par `--no-ai`.
+
+### Flux interactif
+
+Pour chaque candidat retenu → Panel rich avec source/ref/date/auteur/résumé/confiance → prompt [v]alider / [i]gnorer / [a]rrêter → si validé : `generate_draft()` → `save_adr()`.
+
+### Patterns par défaut
+
+Commits : `"on a décidé"`, `"on va partir sur"`, `"on abandonne"`, `"décision :"`, `"DECISION:"`, `"ADR:"`, `"on choisit"`, `"we decided"`, `"decided to"`
+
+Code : `"DECISION:"`, `"ADR:"`, `"# decision"`, `"// decision"`
+
+Dossiers ignorés : `.git`, `node_modules`, `__pycache__`, `.venv`, `venv`, `.tox`, `dist`, `build`
+
 ## Pièges connus
 
 **Modules 1-2** :
@@ -164,3 +196,9 @@ Logique de matching (ordre de priorité) :
 - Ollama scoring : ~500ms par message. Pour <50 msg/jour c'est OK, au-delà envisager un cache ou batch.
 - Token expiration : Slack bot tokens ne se renouvellent pas automatiquement. Relancer le bot en cas de 401.
 - `teambrain bot --check` pour diagnostiquer avant de lancer (vérifie token, DM lead, liste les canaux à inviter).
+
+**Module 4** :
+- `_depuis_vers_git` utilise `re.fullmatch(r"(\d+)([wmy])")` — le suffixe `y` de `"yesterday"` ne matche pas car il n'est pas précédé d'un chiffre (piège évité par le fullmatch).
+- `scanner_commits` ne scanne que le sujet du commit (`%s`), pas le corps (`%b`). Les décisions dans le corps du message sont manquées. À étendre si besoin.
+- `score_candidat` lève `ValueError` sur JSON malformé — absorbé avec `logger.warning` dans les scanners. Surveiller les logs si le nombre de candidats semble anormalement bas.
+- `scanner_code` en mode `score_ia=True` peut être lent sur de gros repos (1 appel Ollama par ligne matchant). Utiliser `--no-ai` pour un premier balayage rapide, puis scorer manuellement.
