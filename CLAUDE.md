@@ -51,7 +51,7 @@ pip install -e ".[dev]"        # core + dev deps
 pip install -e ".[bot]"        # core + slack-sdk + PyGithub (pour Module 3)
 
 # Tests
-pytest                         # 45 tests
+pytest                         # 51 tests
 
 # CLI
 teambrain init                 # crée .decisions/ dans le repo courant
@@ -62,7 +62,10 @@ teambrain show 1               # affiche un ADR complet
 teambrain index                # indexe dans sqlite-vec (qwen3-embedding:0.6b)
 teambrain serve                # lance le serveur MCP stdio
 teambrain setup                # configure Claude Code + Cursor
-teambrain bot --confidence 0.7 # lance le chat bot Slack
+teambrain setup slack          # wizard configuration Slack (2 étapes)
+teambrain bot                  # lance le chat bot Slack
+teambrain bot --check          # vérifie la config sans lancer le bot
+teambrain bot --confidence 0.7 # seuil de confiance personnalisé
 ```
 
 ## État des modules
@@ -153,7 +156,11 @@ Logique de matching (ordre de priorité) :
 - `get_context_for_file()` : utilise `module_mappings` si présent, sinon fallback sur les segments du chemin. Pour les gros projets, configurer les mappings explicites.
 
 **Module 3** :
-- Socket Mode : `SocketModeClient.listen()` est blocking. Pour une vraie démo, wrapper dans une thread ou asyncio (non fait dans MVP).
-- Block Kit : les `action_id` incluent un timestamp pour tracking (pas d'ID stable entre restarts). Solution : persister `_pending` si redémarrage planifié.
-- Ollama scoring : peut être lent (~500ms par message). Pour <50 msg/jour c'est OK, au-delà envisager un cache ou batch.
-- Token expiration : Slack bot tokens ne se renouvellent pas automatiquement. Relancer le bot en cas de 401 authentification.
+- Socket Mode : `SocketModeClient.connect()` est non-blocking → `threading.Event().wait()` pour maintenir le process vivant.
+- Block Kit payload : le user ID est dans `payload["user"]["id"]`, pas `payload["user_id"]` (piège confirmé en test live).
+- `_pending` est en mémoire : perdu au redémarrage. Les propositions en attente deviennent orphelines après un restart.
+- Le bot doit être **invité dans chaque canal** via `/invite @BotName` — sans ça, Socket Mode ne livre pas les messages même avec les bons scopes et event subscriptions.
+- Scopes OAuth requis : `channels:read channels:history groups:read groups:history im:history chat:write im:write users:read`. Oublier `channels:read` ou `groups:read` empêche la réception des événements.
+- Ollama scoring : ~500ms par message. Pour <50 msg/jour c'est OK, au-delà envisager un cache ou batch.
+- Token expiration : Slack bot tokens ne se renouvellent pas automatiquement. Relancer le bot en cas de 401.
+- `teambrain bot --check` pour diagnostiquer avant de lancer (vérifie token, DM lead, liste les canaux à inviter).
