@@ -34,12 +34,15 @@ class SlackAdapter(ChatPlatformAdapter):
             """Traite les événements API (messages)."""
             if req.type == "events_api":
                 event = req.payload.get("event", {})
-                if event.get("type") == "message":
+                if event.get("type") == "message" and not event.get("bot_id"):
+                    text = event.get("text", "")
+                    channel = event.get("channel", "")
+                    logger.info("Message reçu dans %s : %s", channel, text[:80])
                     msg = Message(
                         id=event.get("ts", ""),
-                        channel=event.get("channel", ""),
+                        channel=channel,
                         thread_ts=event.get("thread_ts"),
-                        text=event.get("text", ""),
+                        text=text,
                         user_id=event.get("user", ""),
                     )
                     try:

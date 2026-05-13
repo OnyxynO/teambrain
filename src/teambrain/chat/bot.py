@@ -1,4 +1,5 @@
 from __future__ import annotations
+import logging
 import re
 import json
 import uuid
@@ -10,6 +11,8 @@ import ollama
 
 from ..adr import ADR, save_adr
 from .base import ChatPlatformAdapter, Message
+
+logger = logging.getLogger(__name__)
 
 
 PATTERNS = [
@@ -97,10 +100,13 @@ class DecisionBot:
         Flux : is_candidate → qualify → generate_draft → send_proposal
         """
         if not _is_candidate(msg.text):
+            logger.info("Message ignoré (pas candidat) : %s", msg.text[:60])
             return
 
         qual = _qualify(msg.text, self._config.get("model", "qwen3:1.7b"))
+        logger.info("Scoring : is_decision=%s confidence=%.2f", qual["is_decision"], qual["confidence"])
         if not qual["is_decision"] or qual["confidence"] < self._config.get("confidence_threshold", 0.7):
+            logger.info("Message écarté (seuil non atteint)")
             return
 
         adr = self._generate_draft(qual, msg)

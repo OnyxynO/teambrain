@@ -518,6 +518,13 @@ def bot(
         except ImportError:
             err.print("[yellow]PyGithub non installé. Installe avec : pip install -e '.[bot]'[/yellow]")
 
+    import logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(name)s %(levelname)s %(message)s",
+        datefmt="%H:%M:%S",
+    )
+
     try:
         console.print(f"[green]▶[/green] TeamBrain bot démarré sur Slack (confiance : {confidence})")
         console.print(f"[dim]Canaux : {', '.join(channels)}[/dim]")
