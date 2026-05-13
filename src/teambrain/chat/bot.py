@@ -1,6 +1,7 @@
 from __future__ import annotations
 import re
 import json
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from datetime import date
@@ -46,7 +47,7 @@ def _qualify(text: str, model: str) -> dict:
         messages=[{"role": "user", "content": prompt}],
         stream=False,
     )
-    content = response.get("message", {}).get("content", "")
+    content = response["message"]["content"]
 
     try:
         result = json.loads(content)
@@ -62,6 +63,7 @@ def _qualify(text: str, model: str) -> dict:
 @dataclass
 class PendingProposal:
     """ADR en attente de validation par le tech lead."""
+    proposal_id: str
     message_ts: str
     adr: ADR
 
@@ -100,6 +102,7 @@ class DecisionBot:
 
         adr = self._generate_draft(qual, msg)
         context = f"#{msg.channel} — {msg.text[:100]}"
+        proposal_id = str(uuid.uuid4())
 
         message_ts = self._adapter.send_proposal(
             self._config.get("lead_user_id", ""),
@@ -110,9 +113,10 @@ class DecisionBot:
                 "consequences": adr.consequences,
             },
             context,
+            proposal_id,
         )
 
-        self._pending[message_ts] = PendingProposal(message_ts, adr)
+        self._pending[proposal_id] = PendingProposal(proposal_id, message_ts, adr)
 
     def _generate_draft(self, qual: dict, msg: Message) -> ADR:
         """Crée un brouillon d'ADR à partir de la qualification Ollama."""
@@ -146,8 +150,8 @@ class DecisionBot:
 
     def _action_validate(self, action_id: str, payload: dict) -> None:
         """Valide et sauvegarde l'ADR, crée une PR GitHub."""
-        message_ts = action_id.replace("validate_", "")
-        proposal = self._pending.pop(message_ts, None)
+        proposal_id = action_id.replace("validate_", "", 1)
+        proposal = self._pending.pop(proposal_id, None)
         if not proposal:
             return
 
@@ -170,8 +174,8 @@ class DecisionBot:
 
     def _action_edit(self, action_id: str, payload: dict) -> None:
         """Ouvre un modal pour éditer l'ADR (à implémenter côté Slack)."""
-        message_ts = action_id.replace("edit_", "")
-        proposal = self._pending.get(message_ts)
+        proposal_id = action_id.replace("edit_", "", 1)
+        proposal = self._pending.get(proposal_id)
         if not proposal:
             return
 
@@ -182,8 +186,8 @@ class DecisionBot:
 
     def _action_ignore(self, action_id: str) -> None:
         """Supprime la proposition."""
-        message_ts = action_id.replace("ignore_", "")
-        self._pending.pop(message_ts, None)
+        proposal_id = action_id.replace("ignore_", "", 1)
+        self._pending.pop(proposal_id, None)
 
     def _adr_to_markdown(self, adr: ADR) -> str:
         """Convertit un ADR en markdown frontmatter (compatible avec from_post)."""

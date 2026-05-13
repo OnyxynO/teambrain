@@ -1,4 +1,5 @@
 from __future__ import annotations
+import copy
 import json
 from pathlib import Path
 
@@ -34,8 +35,15 @@ def find_decisions_dir() -> Path | None:
 def load_config(decisions_dir: Path) -> dict:
     config_path = decisions_dir / CONFIG_FILENAME
     if config_path.exists():
-        return {**DEFAULT_CONFIG, **json.loads(config_path.read_text())}
-    return DEFAULT_CONFIG.copy()
+        user_config = json.loads(config_path.read_text())
+        merged = copy.deepcopy(DEFAULT_CONFIG)
+        for key, value in user_config.items():
+            if isinstance(value, dict) and key in merged and isinstance(merged[key], dict):
+                merged[key] = {**merged[key], **value}
+            else:
+                merged[key] = value
+        return merged
+    return copy.deepcopy(DEFAULT_CONFIG)
 
 
 def save_config(decisions_dir: Path, config: dict) -> None:

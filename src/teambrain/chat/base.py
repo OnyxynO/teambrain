@@ -47,13 +47,14 @@ class ChatPlatformAdapter(ABC):
         pass
 
     @abstractmethod
-    def send_proposal(self, user_id: str, adr_draft: dict, context: str) -> str:
+    def send_proposal(self, user_id: str, adr_draft: dict, context: str, proposal_id: str) -> str:
         """Envoie une proposition d'ADR avec boutons d'action Block Kit.
 
         Args:
             user_id: ID du tech lead
             adr_draft: Dict contenant titre, contexte, decision, consequences
             context: Contexte d'où la décision a été détectée
+            proposal_id: UUID stable pour tracker cette proposition
 
         Returns:
             ID du message envoyé (message_ts pour Slack)

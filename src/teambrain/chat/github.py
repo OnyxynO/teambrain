@@ -1,19 +1,11 @@
 from __future__ import annotations
-import re
+import logging
 from github import Github
 from github.GithubException import GithubException
 
-from ..adr import ADR
+from ..adr import ADR, slugify
 
-
-def slugify(text: str) -> str:
-    """Convertit un texte en slug URL-safe."""
-    text = text.lower()
-    for src, dst in [("àâä", "a"), ("éèêë", "e"), ("îï", "i"), ("ôö", "o"), ("ùûü", "u"), ("ç", "c")]:
-        for ch in src:
-            text = text.replace(ch, dst)
-    text = re.sub(r"[^a-z0-9]+", "-", text)
-    return text.strip("-")[:50]
+logger = logging.getLogger(__name__)
 
 
 class GitHubPRCreator:
@@ -67,8 +59,8 @@ class GitHubPRCreator:
 
             return pr.html_url
 
-        except GithubException as e:
-            print(f"Erreur création PR : {e}")
+        except GithubException:
+            logger.exception("Erreur création PR")
             raise
 
     def _pr_body(self, adr: ADR) -> str:

@@ -27,11 +27,12 @@ class FakeAdapter:
         self.dms.append({"user_id": user_id, "text": text})
         return "ts-mock"
 
-    def send_proposal(self, user_id: str, adr_draft: dict, context: str) -> str:
+    def send_proposal(self, user_id: str, adr_draft: dict, context: str, proposal_id: str) -> str:
         self.proposals.append({
             "user_id": user_id,
             "draft": adr_draft,
             "context": context,
+            "proposal_id": proposal_id,
         })
         return "ts-proposal"
 
@@ -210,9 +211,10 @@ class TestDecisionBot:
             decision="dec",
             consequences="cons"
         )
-        bot._pending["ts-proposal"] = PendingProposal("ts-proposal", adr)
+        proposal_id = "test-proposal-123"
+        bot._pending[proposal_id] = PendingProposal(proposal_id, "ts-proposal", adr)
 
-        bot._on_action("validate_ts-proposal", {"user_id": "U999"})
+        bot._on_action(f"validate_{proposal_id}", {"user_id": "U999"})
 
         assert mock_save.called
         assert len(bot._pending) == 0
@@ -228,9 +230,10 @@ class TestDecisionBot:
             statut="propose", modules=[], decideurs=[],
             contexte="", decision="", consequences=""
         )
-        bot._pending["ts-proposal"] = PendingProposal("ts-proposal", adr)
+        proposal_id = "test-proposal-456"
+        bot._pending[proposal_id] = PendingProposal(proposal_id, "ts-proposal", adr)
 
-        bot._on_action("ignore_ts-proposal", {})
+        bot._on_action(f"ignore_{proposal_id}", {})
 
         assert len(bot._pending) == 0
 
@@ -305,9 +308,11 @@ class TestIntegrationBot:
         assert len(adapter.proposals) == 1
         assert len(bot._pending) == 1
 
-        proposal_ts = "ts-proposal"
-        bot._pending[proposal_ts] = bot._pending.pop("ts-proposal")
-        bot._on_action(f"validate_{proposal_ts}", {"user_id": "U999"})
+        # Récupérer le proposal_id depuis la proposition
+        proposal_data = adapter.proposals[0]
+        proposal_id = proposal_data["proposal_id"]
+
+        bot._on_action(f"validate_{proposal_id}", {"user_id": "U999"})
 
         assert len(bot._pending) == 0
         assert mock_save.called
