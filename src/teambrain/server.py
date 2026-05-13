@@ -73,16 +73,49 @@ def list_decisions(module: str = "", statut: str = "") -> str:
     )
 
 
+def _modules_for_file(filepath: str, module_mappings: dict) -> set[str]:
+    """Résout un chemin en ensemble de modules selon les mappings configurés.
+
+    Stratégie (du plus précis au plus générique) :
+    1. Mappings explicites (pattern de préfixe chemin -> module(s))
+    2. Fallback : segments du chemin qui matchent un nom de module
+    3. Vide si aucun match
+    """
+    modules: set[str] = set()
+
+    # Normaliser le chemin (convertir séparateurs Windows)
+    normalized = filepath.replace("\\", "/")
+
+    # Niveau 1 : mappings explicites
+    for pattern, mapped in module_mappings.items():
+        pattern_norm = pattern.replace("\\", "/").rstrip("/")
+        # Test : le chemin commence par le pattern (ex: "src/auth/" matche "src/auth/service.py")
+        # OU le pattern est contenu comme segment complet (ex: "auth" dans "src/auth/utils")
+        if normalized.startswith(pattern_norm + "/") or normalized.startswith(pattern_norm):
+            if isinstance(mapped, list):
+                modules.update(mapped)
+            else:
+                modules.add(str(mapped))
+
+    # Niveau 2 : fallback par segments du chemin
+    if not modules:
+        modules = {p.lower() for p in Path(filepath).parts}
+
+    return modules
+
+
 @mcp_app.tool()
 def get_context_for_file(filepath: str) -> str:
     """Retourne les ADR pertinents pour un fichier ou chemin donné."""
     d, config, adrs = _get_ctx()
 
-    # Correspondance par nom de module dans le chemin
-    parts = {p.lower() for p in Path(filepath).parts}
+    # Résoudre le chemin en modules via config
+    resolved_modules = _modules_for_file(filepath, config.get("module_mappings", {}))
+
+    # Recherche par modules
     by_module = [
         a for a in adrs.values()
-        if any(m.lower() in parts for m in a.modules)
+        if any(m.lower() in resolved_modules for m in a.modules)
     ]
 
     # Recherche sémantique sur le chemin

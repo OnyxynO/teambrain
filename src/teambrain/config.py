@@ -6,6 +6,7 @@ CONFIG_FILENAME = ".teambrain.json"
 DEFAULT_CONFIG = {
     "model": "qwen3:1.7b",
     "embedding_model": "qwen3-embedding:0.6b",
+    "module_mappings": {},
 }
 
 
