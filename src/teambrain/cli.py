@@ -619,16 +619,24 @@ def scan_commits(
     depuis: str = typer.Option("1w", "--depuis", help="Période à scanner : '1w', '3m', '6m', '1y' ou date ISO"),
     confiance: float = typer.Option(0.7, "--confiance", help="Seuil de confiance IA (0-1)"),
     no_ai: bool = typer.Option(False, "--no-ai", help="Retourner tous les matchs bruts sans scoring IA"),
+    pattern: list[str] = typer.Option([], "--pattern", "-p", help="Pattern supplémentaire (répétable)"),
 ):
     """Scanne les commits git récents pour détecter des décisions non documentées."""
     decisions_dir = _require_dir()
     config = load_config(decisions_dir)
     chemin_repo = decisions_dir.parent
 
+    patterns_extra = list(pattern) + config.get("commit_patterns", [])
+    if patterns_extra:
+        console.print(f"[dim]Patterns supplémentaires : {', '.join(patterns_extra)}[/dim]")
     console.print(f"[dim]Scan des commits depuis {depuis} (confiance min : {int(confiance * 100)}%)…[/dim]")
 
     try:
-        candidats = scanner_commits(chemin_repo, depuis, config["model"], confiance, score_ia=not no_ai)
+        candidats = scanner_commits(
+            chemin_repo, depuis, config["model"], confiance,
+            score_ia=not no_ai,
+            patterns_extra=patterns_extra or None,
+        )
     except RuntimeError as exc:
         err.print(f"[red]Erreur :[/red] {exc}")
         raise typer.Exit(1)
@@ -655,10 +663,13 @@ def scan_code(
     config = load_config(decisions_dir)
     chemin_repo = decisions_dir.parent
 
+    patterns_extra = list(pattern) + config.get("code_patterns", [])
+    if patterns_extra:
+        console.print(f"[dim]Patterns supplémentaires : {', '.join(patterns_extra)}[/dim]")
     console.print(f"[dim]Scan du code (confiance min : {int(confiance * 100)}%)…[/dim]")
 
     try:
-        candidats = scanner_code(chemin_repo, list(pattern) or None, config["model"], confiance, score_ia=not no_ai)
+        candidats = scanner_code(chemin_repo, patterns_extra or None, config["model"], confiance, score_ia=not no_ai)
     except RuntimeError as exc:
         err.print(f"[red]Erreur :[/red] {exc}")
         raise typer.Exit(1)

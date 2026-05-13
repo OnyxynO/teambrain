@@ -8,6 +8,8 @@ DEFAULT_CONFIG = {
     "model": "qwen3:1.7b",
     "embedding_model": "qwen3-embedding:0.6b",
     "module_mappings": {},
+    "commit_patterns": [],
+    "code_patterns": [],
     "chat": {
         "platform": "slack",
         "channels": [],

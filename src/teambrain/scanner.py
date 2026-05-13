@@ -64,6 +64,19 @@ DOSSIERS_IGNORES = {".git", "node_modules", "__pycache__", ".venv", "venv", ".to
 # Conversion de la durée en format git
 # ──────────────────────────────────────────────────────────────
 
+def _match_patterns(texte: str, patterns: list[str]) -> bool:
+    """Retourne True si au moins un pattern matche le texte (regex ou sous-chaîne)."""
+    texte_lower = texte.lower()
+    for p in patterns:
+        try:
+            if re.search(p, texte_lower, re.IGNORECASE):
+                return True
+        except re.error:
+            if p.lower() in texte_lower:
+                return True
+    return False
+
+
 def _depuis_vers_git(depuis: str) -> str:
     """Convertit un raccourci de durée vers le format git --since.
 
@@ -150,6 +163,7 @@ def scanner_commits(
     model: str = "qwen3:1.7b",
     confiance_min: float = 0.7,
     score_ia: bool = True,
+    patterns_extra: list[str] | None = None,
 ) -> list[Candidat]:
     """Scanne les commits git depuis `depuis` et retourne les candidats décisionnels.
 
@@ -159,10 +173,12 @@ def scanner_commits(
         model: Modèle Ollama pour le scoring.
         confiance_min: Seuil de confiance minimum (0-1).
         score_ia: Si False, retourne les candidats bruts sans appeler Ollama.
+        patterns_extra: Patterns supplémentaires (s'ajoutent aux défauts).
 
     Returns:
         Liste de Candidat filtrés au-dessus du seuil.
     """
+    patterns = PATTERNS_COMMIT + (patterns_extra or [])
     since = _depuis_vers_git(depuis)
     # Format : hash<TAB>date ISO<TAB>auteur<TAB>sujet
     git_format = "%H\t%as\t%an\t%s"
@@ -184,9 +200,8 @@ def scanner_commits(
             continue
         hash_commit, date_str, auteur, sujet = parties
 
-        # Filtrage rapide par patterns
-        sujet_lower = sujet.lower()
-        if not any(p.lower() in sujet_lower for p in PATTERNS_COMMIT):
+        # Filtrage rapide par patterns (regex ou sous-chaîne)
+        if not _match_patterns(sujet, patterns):
             continue
 
         try:
@@ -282,8 +297,7 @@ def scanner_code(
             continue
 
         for num_ligne, ligne in enumerate(lignes, start=1):
-            ligne_lower = ligne.lower()
-            if not any(p.lower() in ligne_lower for p in patterns):
+            if not _match_patterns(ligne, patterns):
                 continue
 
             ref = f"{fichier.relative_to(chemin_repo)}:{num_ligne}"

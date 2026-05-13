@@ -175,6 +175,24 @@ def test_scanner_commits_exclut_si_pas_decision():
     assert candidats == []
 
 
+def test_scanner_commits_patterns_extra():
+    """Un pattern supplémentaire détecte des commits qui ne matchent pas les patterns par défaut."""
+    mock_run = MagicMock()
+    mock_run.returncode = 0
+    mock_run.stdout = "abc12345\t2026-05-01\tAlice\tmigrer arborescence vers ltree PostgreSQL\n"
+
+    with patch("teambrain.scanner.subprocess.run", return_value=mock_run), \
+         patch("teambrain.scanner.score_candidat", side_effect=_mock_score_decision):
+        # Sans pattern extra → aucun match (les patterns par défaut ne contiennent pas "migrer")
+        sans_extra = scanner_commits(Path("/fake/repo"), "1w", "qwen3:1.7b", 0.7)
+        # Avec pattern extra → match
+        avec_extra = scanner_commits(Path("/fake/repo"), "1w", "qwen3:1.7b", 0.7, patterns_extra=["migrer"])
+
+    assert sans_extra == []
+    assert len(avec_extra) == 1
+    assert avec_extra[0].ref == "abc12345"
+
+
 def test_scanner_commits_erreur_git_leve_runtime():
     """Si git log échoue (returncode != 0), RuntimeError est levée."""
     mock_run = MagicMock()
