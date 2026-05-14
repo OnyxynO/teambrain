@@ -105,15 +105,14 @@ _SYSTEM_SCORE = """Tu es un expert en Architecture Decision Records (ADR).
 Analyse le texte suivant et détermine s'il décrit une décision architecturale.
 Réponds uniquement avec un objet JSON valide, sans markdown ni explication."""
 
-_USER_SCORE = """Texte à analyser (limité à 500 caractères) :
-{texte}
+_USER_SCORE_SUFFIX = """
 
 Réponds avec exactement ce JSON :
-{{
+{
   "est_decision": true ou false,
   "confiance": nombre entre 0.0 et 1.0,
   "resume": "résumé de la décision en une phrase, ou chaîne vide si pas une décision"
-}}"""
+}"""
 
 
 def score_candidat(texte: str, model: str) -> dict:
@@ -125,11 +124,12 @@ def score_candidat(texte: str, model: str) -> dict:
     Lève ValueError si la réponse JSON est malformée et irrécupérable.
     """
     texte_tronque = texte[:500]
+    user_content = f"Texte à analyser (limité à 500 caractères) :\n{texte_tronque}" + _USER_SCORE_SUFFIX
     response = ollama.chat(
         model=model,
         messages=[
             {"role": "system", "content": _SYSTEM_SCORE},
-            {"role": "user", "content": _USER_SCORE.format(texte=texte_tronque)},
+            {"role": "user", "content": user_content},
         ],
         options={"temperature": 0.1},
     )
@@ -191,7 +191,7 @@ def scanner_commits(
     if resultat.returncode != 0:
         raise RuntimeError(f"Erreur git log : {resultat.stderr.strip()}")
 
-    lignes = [l for l in resultat.stdout.splitlines() if l.strip()]
+    lignes = [ligne for ligne in resultat.stdout.splitlines() if ligne.strip()]
     candidats: list[Candidat] = []
 
     for ligne in lignes:
@@ -265,6 +265,7 @@ def scanner_code(
     model: str = "qwen3:1.7b",
     confiance_min: float = 0.8,
     score_ia: bool = True,
+    max_candidats: int = 200,
 ) -> list[Candidat]:
     """Scanne les fichiers texte du repo à la recherche de marqueurs décisionnels.
 
@@ -282,6 +283,9 @@ def scanner_code(
     candidats: list[Candidat] = []
 
     for fichier in chemin_repo.rglob("*"):
+        if max_candidats and len(candidats) >= max_candidats:
+            logger.warning("Limite de %d candidats atteinte — scan arrêté.", max_candidats)
+            break
         # Ignorer les dossiers et les chemins à exclure
         if not fichier.is_file():
             continue
@@ -297,6 +301,8 @@ def scanner_code(
             continue
 
         for num_ligne, ligne in enumerate(lignes, start=1):
+            if max_candidats and len(candidats) >= max_candidats:
+                break
             if not _match_patterns(ligne, patterns):
                 continue
 

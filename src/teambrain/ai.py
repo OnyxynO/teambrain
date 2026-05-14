@@ -7,25 +7,26 @@ _SYSTEM = """Tu es un expert en Architecture Decision Records (ADR).
 Génère un brouillon d'ADR en JSON à partir d'une description.
 Réponds uniquement avec un objet JSON valide, sans markdown ni explication."""
 
-_USER = """Description : {description}
+_USER_SUFFIX = """
 
 Génère un ADR avec exactement ces champs JSON :
-{{
+{
   "titre": "titre court et descriptif de la décision",
   "modules": ["liste", "des", "modules", "concernés"],
   "decideurs": [],
   "contexte": "contexte et contraintes qui ont mené à cette décision",
   "decision": "la décision prise et pourquoi",
   "consequences": "conséquences positives et négatives"
-}}"""
+}"""
 
 
 def generate_draft(description: str, model: str) -> dict:
+    user_content = f"Description : {description}" + _USER_SUFFIX
     response = ollama.chat(
         model=model,
         messages=[
             {"role": "system", "content": _SYSTEM},
-            {"role": "user", "content": _USER.format(description=description)},
+            {"role": "user", "content": user_content},
         ],
         options={"temperature": 0.3},
     )
@@ -34,4 +35,7 @@ def generate_draft(description: str, model: str) -> dict:
     if content.startswith("```"):
         lines = content.split("\n")
         content = "\n".join(lines[1:-1])
-    return json.loads(content)
+    try:
+        return json.loads(content)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Réponse JSON malformée : {exc}\nContenu : {content!r}") from exc

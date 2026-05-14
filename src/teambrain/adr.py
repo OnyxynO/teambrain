@@ -1,10 +1,13 @@
 from __future__ import annotations
+import logging
 import re
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
 import frontmatter
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -23,7 +26,10 @@ class ADR:
 
 def slugify(text: str) -> str:
     text = text.lower()
-    for src, dst in [("àâä", "a"), ("éèêë", "e"), ("îï", "i"), ("ôö", "o"), ("ùûü", "u"), ("ç", "c")]:
+    for src, dst in [
+        ("àâäÀÂÄ", "a"), ("éèêëÉÈÊË", "e"), ("îïÎÏ", "i"),
+        ("ôöÔÖ", "o"), ("ùûüÙÛÜ", "u"), ("çÇ", "c"), ("ñÑ", "n"),
+    ]:
         for ch in src:
             text = text.replace(ch, dst)
     text = re.sub(r"[^a-z0-9]+", "-", text)
@@ -92,7 +98,8 @@ def list_adrs(decisions_dir: Path) -> list[ADR]:
     for p in sorted(decisions_dir.glob("[0-9]*.md")):
         try:
             adrs.append(load_adr(p))
-        except Exception:
+        except Exception as exc:
+            logger.warning("ADR ignoré (lecture échouée) : %s — %s", p, exc)
             continue
     return adrs
 

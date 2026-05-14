@@ -357,6 +357,8 @@ def _setup_slack() -> None:
         f"TEAMBRAIN_LEAD={lead_id}\n"
     )
     env_path.write_text(env_content, encoding="utf-8")
+    import os as _os
+    _os.chmod(env_path, 0o600)
     console.print(f"\n[green]✓[/green] {env_path} écrit.")
 
     gitignore = Path.cwd() / ".gitignore"

@@ -97,9 +97,9 @@ def _modules_for_file(filepath: str, module_mappings: dict) -> set[str]:
             else:
                 modules.add(str(mapped))
 
-    # Niveau 2 : fallback par segments du chemin
+    # Niveau 2 : fallback par segments du chemin (fichiers exclus)
     if not modules:
-        modules = {p.lower() for p in Path(filepath).parts}
+        modules = {p.lower() for p in Path(filepath).parts if "." not in p}
 
     return modules
 

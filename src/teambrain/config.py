@@ -37,7 +37,10 @@ def find_decisions_dir() -> Path | None:
 def load_config(decisions_dir: Path) -> dict:
     config_path = decisions_dir / CONFIG_FILENAME
     if config_path.exists():
-        user_config = json.loads(config_path.read_text())
+        try:
+            user_config = json.loads(config_path.read_text())
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(f"Config invalide ({config_path}) : {exc}") from exc
         merged = copy.deepcopy(DEFAULT_CONFIG)
         for key, value in user_config.items():
             if isinstance(value, dict) and key in merged and isinstance(merged[key], dict):

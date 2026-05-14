@@ -25,13 +25,13 @@ class TestModulesForFile:
         assert "auth" in result
 
     def test_fallback_segment_sans_mapping(self):
-        """Sans mapping, fallback sur les segments du chemin."""
+        """Sans mapping, fallback sur les segments du chemin (fichiers exclus)."""
         mappings = {}
         result = _modules_for_file("src/auth/service.py", mappings)
-        # Segments : ['src', 'auth', 'service.py']
+        # Segments dirs : ['src', 'auth'] — 'service.py' exclu (contient '.')
         assert "src" in result
         assert "auth" in result
-        assert "service.py" in result
+        assert "service.py" not in result
 
     def test_fallback_segment_priorite_mapping(self):
         """Si un mapping matche, pas de fallback segment."""
@@ -73,12 +73,12 @@ class TestModulesForFile:
         assert "auth" in result
 
     def test_absence_match(self):
-        """Un chemin sans match retourne fallback (segments)."""
+        """Un chemin sans match retourne fallback (segments, fichiers exclus)."""
         mappings = {"src/auth/": "auth"}
         result = _modules_for_file("other/file.py", mappings)
-        # Pas de mapping, fallback segment
+        # Pas de mapping, fallback segment — 'file.py' exclu (contient '.')
         assert "other" in result
-        assert "file.py" in result
+        assert "file.py" not in result
 
     def test_mapping_value_string_vs_list(self):
         """Les deux formats (string et list) fonctionnent dans le même dict."""

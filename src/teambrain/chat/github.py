@@ -35,7 +35,8 @@ class GitHubPRCreator:
         filename = f".decisions/{adr.id:03d}-{slugify(adr.titre)}.md"
 
         try:
-            main_ref = self.repo.get_git_ref("heads/main")
+            default_branch = self.repo.default_branch
+            main_ref = self.repo.get_git_ref(f"heads/{default_branch}")
             main_sha = main_ref.object.sha
 
             self.repo.create_git_ref(
@@ -54,7 +55,7 @@ class GitHubPRCreator:
                 title=f"ADR #{adr.id:03d} — {adr.titre}",
                 body=self._pr_body(adr),
                 head=branch_name,
-                base="main",
+                base=default_branch,
             )
 
             return pr.html_url

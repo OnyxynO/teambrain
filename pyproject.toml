@@ -7,19 +7,19 @@ name = "teambrain"
 version = "0.1.0"
 requires-python = ">=3.13"
 dependencies = [
-    "typer[all]>=0.12",
-    "ollama>=0.4",
-    "python-frontmatter>=1.1",
-    "rich>=13",
-    "sqlite-vec>=0.1.0",
-    "mcp>=1.0.0",
+    "typer[all]~=0.12",
+    "ollama~=0.4",
+    "python-frontmatter~=1.1",
+    "rich~=13.0",
+    "sqlite-vec~=0.1",
+    "mcp~=1.0",
 ]
 
 [project.optional-dependencies]
-slack = ["slack-sdk>=3.30"]
-github = ["PyGithub>=2.0"]
-bot = ["slack-sdk>=3.30", "PyGithub>=2.0"]
-dev = ["pytest>=8", "pytest-cov"]
+slack = ["slack-sdk~=3.30"]
+github = ["PyGithub~=2.0"]
+bot = ["slack-sdk~=3.30", "PyGithub~=2.0"]
+dev = ["pytest~=8.0", "pytest-cov"]
 
 [project.scripts]
 teambrain = "teambrain.cli:app"

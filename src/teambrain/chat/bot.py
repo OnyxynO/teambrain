@@ -2,6 +2,7 @@ from __future__ import annotations
 import logging
 import re
 import json
+import threading
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
@@ -36,18 +37,24 @@ def _qualify(text: str, model: str) -> dict:
 
     Retourne {"is_decision": bool, "confidence": float, "summary": str}
     """
-    prompt = (
+    system = (
         "Tu es un expert en architecture logicielle. "
+        "Réponds uniquement avec un objet JSON valide, sans markdown ni explication."
+    )
+    prompt = (
         "Analyse le texte suivant pour déterminer s'il décrit une décision architecturale "
         "(technologie choisie, pattern adopté, trade-off évalué, contrainte acceptée).\n\n"
         f"Texte : {text}\n\n"
-        "Réponds avec un JSON : {\"is_decision\": bool, \"confidence\": float (0-1), \"summary\": str}\n"
+        'Réponds avec un JSON : {"is_decision": bool, "confidence": float (0-1), "summary": str}\n'
         "Le summary explique brièvement la décision en 1-2 phrases."
     )
 
     response = ollama.chat(
         model=model,
-        messages=[{"role": "user", "content": prompt}],
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": prompt},
+        ],
         stream=False,
     )
     content = response.message.content.strip()
@@ -89,6 +96,7 @@ class DecisionBot:
         self._config = config
         self._github_creator = github_creator
         self._pending: dict[str, PendingProposal] = {}
+        self._lock = threading.Lock()
 
     def run(self, channels: list[str]) -> None:
         """Lance le bot : écoute les canaux et traite les messages/actions."""
@@ -109,27 +117,28 @@ class DecisionBot:
             logger.info("Message écarté (seuil non atteint)")
             return
 
-        adr = self._generate_draft(qual, msg)
-        logger.info("Brouillon généré : %s", adr.titre)
-        context = f"#{msg.channel} — {msg.text[:100]}"
-        proposal_id = str(uuid.uuid4())
-        lead = self._config.get("lead_user_id", "")
-        logger.info("Envoi proposition DM à lead_user_id=%r", lead)
+        with self._lock:
+            adr = self._generate_draft(qual, msg)
+            logger.info("Brouillon généré : %s", adr.titre)
+            context = f"#{msg.channel} — {msg.text[:100]}"
+            proposal_id = str(uuid.uuid4())
+            lead = self._config.get("lead_user_id", "")
+            logger.info("Envoi proposition DM à lead_user_id=%r", lead)
 
-        message_ts = self._adapter.send_proposal(
-            lead,
-            {
-                "titre": adr.titre,
-                "contexte": adr.contexte,
-                "decision": adr.decision,
-                "consequences": adr.consequences,
-            },
-            context,
-            proposal_id,
-        )
+            message_ts = self._adapter.send_proposal(
+                lead,
+                {
+                    "titre": adr.titre,
+                    "contexte": adr.contexte,
+                    "decision": adr.decision,
+                    "consequences": adr.consequences,
+                },
+                context,
+                proposal_id,
+            )
 
-        logger.info("Proposition envoyée (ts=%s) — en attente de validation", message_ts)
-        self._pending[proposal_id] = PendingProposal(proposal_id, message_ts, adr)
+            logger.info("Proposition envoyée (ts=%s) — en attente de validation", message_ts)
+            self._pending[proposal_id] = PendingProposal(proposal_id, message_ts, adr)
 
     def _generate_draft(self, qual: dict, msg: Message) -> ADR:
         """Crée un brouillon d'ADR à partir de la qualification Ollama."""
@@ -147,10 +156,12 @@ class DecisionBot:
         return adr
 
     def _next_id(self) -> int:
-        """Retourne le prochain ID d'ADR disponible."""
+        """Retourne le prochain ID disponible (appelé sous self._lock)."""
         from ..adr import list_adrs
         adrs = list_adrs(self._decisions_dir)
-        return (max([a.id for a in adrs]) if adrs else 0) + 1
+        saved_max = max((a.id for a in adrs), default=0)
+        pending_max = max((p.adr.id for p in self._pending.values()), default=0)
+        return max(saved_max, pending_max) + 1
 
     def _on_action(self, action_id: str, payload: dict) -> None:
         """Traite les actions interactives (Valider / Éditer / Ignorer)."""
@@ -164,7 +175,8 @@ class DecisionBot:
     def _action_validate(self, action_id: str, payload: dict) -> None:
         """Valide et sauvegarde l'ADR, crée une PR GitHub."""
         proposal_id = action_id.replace("validate_", "", 1)
-        proposal = self._pending.pop(proposal_id, None)
+        with self._lock:
+            proposal = self._pending.pop(proposal_id, None)
         if not proposal:
             return
 
@@ -188,7 +200,8 @@ class DecisionBot:
     def _action_edit(self, action_id: str, payload: dict) -> None:
         """Ouvre un modal pour éditer l'ADR (à implémenter côté Slack)."""
         proposal_id = action_id.replace("edit_", "", 1)
-        proposal = self._pending.get(proposal_id)
+        with self._lock:
+            proposal = self._pending.get(proposal_id)
         if not proposal:
             return
 
@@ -200,7 +213,8 @@ class DecisionBot:
     def _action_ignore(self, action_id: str) -> None:
         """Supprime la proposition."""
         proposal_id = action_id.replace("ignore_", "", 1)
-        self._pending.pop(proposal_id, None)
+        with self._lock:
+            self._pending.pop(proposal_id, None)
 
     def _adr_to_markdown(self, adr: ADR) -> str:
         """Convertit un ADR en markdown frontmatter (compatible avec from_post)."""

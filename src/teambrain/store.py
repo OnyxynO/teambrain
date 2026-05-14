@@ -25,8 +25,10 @@ def _default_embed(text: str, model: str) -> list[float]:
 def _open_db(db_path: Path, dim: int) -> sqlite3.Connection:
     db = sqlite3.connect(str(db_path))
     db.enable_load_extension(True)
-    sqlite_vec.load(db)
-    db.enable_load_extension(False)
+    try:
+        sqlite_vec.load(db)
+    finally:
+        db.enable_load_extension(False)
     db.execute(f"CREATE VIRTUAL TABLE IF NOT EXISTS adr_vecs USING vec0(embedding float[{dim}])")
     db.commit()
     return db
@@ -87,8 +89,10 @@ def search_semantic(
 
     db = sqlite3.connect(str(db_path))
     db.enable_load_extension(True)
-    sqlite_vec.load(db)
-    db.enable_load_extension(False)
+    try:
+        sqlite_vec.load(db)
+    finally:
+        db.enable_load_extension(False)
 
     try:
         rows = db.execute(
