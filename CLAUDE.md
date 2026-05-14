@@ -91,6 +91,48 @@ teambrain scan-code --no-ai                     # matchs bruts sans scoring Olla
 - **Audit sécurité/qualité** : ✅ 14 corrections (2026-05-14) — injection format string, permissions tokens, race condition threading, etc.
 - **Améliorations Slack** : ✅ wizard manifest + check canaux réel + persistance proposals (2026-05-14)
 
+## Roadmap — prochaines évolutions
+
+### Orientation réseau (décision 2026-05-14)
+
+TeamBrain est un **outil d'équipe multi-machine** — les composants n'ont pas vocation à tourner sur la même machine. L'architecture cible est :
+
+```
+[repo git] ← teambrain CLI  (machine développeur)
+                │
+                ▼
+         [SemanticMatch]     (service HTTP partagé, réseau interne ou cloud)
+                │
+                ▼
+         [teambrain MCP]     (server MCP, peut tourner ailleurs)
+                │
+                ▼
+         [Slack bot]         (machine dédiée ou container)
+```
+
+Ollama reste utilisé **localement** pour la génération de brouillons ADR (`teambrain add`) et les embeddings (`teambrain index`). Il n'est plus en chemin critique pour le scanner.
+
+### Module 5 — Scanner sémantique (bloqué sur SemanticMatch)
+
+**Problème actuel** : le scanner (Module 4) utilise des patterns regex + scoring Ollama.
+- Les patterns sont language-specific (français seulement)
+- Ollama est trop conservateur sur les commits courts
+- Pas extensible à d'autres langues/styles de commit sans maintenance manuelle
+
+**Direction décidée** : remplacer patterns+Ollama par similarité sémantique sur l'index ADR existant.
+- Les ADR déjà indexés dans sqlite-vec servent de corpus de référence
+- Un commit/commentaire est candidat s'il est proche sémantiquement d'un ADR existant
+- Le moteur de matching : **SemanticMatch** (service HTTP externe, voir `_ideas/SemanticMatch/`)
+
+**Dépendance bloquante** : SemanticMatch doit être stable avant de modifier le scanner.
+
+**État** : en attente — ne pas modifier `scanner.py` avant que SemanticMatch soit opérationnel.
+
+### Ordre de développement
+
+1. **SemanticMatch** (`_ideas/SemanticMatch/`) — service HTTP Haiku, `POST /match` + `POST /classify`
+2. **Module 5 scanner sémantique** — intégrer SemanticMatch dans `scanner_commits` / `scanner_code`
+
 ## Module 3 — Chat Bot
 
 ### Architecture pluggable
