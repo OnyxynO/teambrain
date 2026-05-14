@@ -32,11 +32,16 @@ src/teambrain/
 ├── scanner.py     # Module 4 — git/code mining : Candidat, score_candidat, scanner_commits, scanner_code
 └── chat/          # Module 3 — Chat bot (optionnel)
     ├── base.py         # Interface ChatPlatformAdapter + Message dataclass
-    ├── bot.py          # DetectionBot : patterns + scoring Ollama + orchestration
-    ├── github.py       # GitHubPRCreator : branche + commit + PR
+    ├── bot.py          # DecisionBot : patterns + scoring Ollama + orchestration + persistance _pending
+    ├── github.py       # GitHubPRCreator : branche + commit + PR (utilise repo.default_branch)
     └── adapters/
         ├── slack.py        # SlackAdapter : Socket Mode + Block Kit
         └── [teams.py]      # TeamsAdapter (à venir)
+
+.decisions/
+├── .teambrain.json          # config du repo
+├── .teambrain_pending.json  # proposals en attente (runtime, gitignored)
+└── teambrain.db             # index vectoriel (gitignored)
 tests/
 ├── test_adr.py       # 11 tests
 ├── test_store.py     # 6 tests (embeddings mockés)
@@ -64,9 +69,9 @@ teambrain show 1               # affiche un ADR complet
 teambrain index                # indexe dans sqlite-vec (qwen3-embedding:0.6b)
 teambrain serve                # lance le serveur MCP stdio
 teambrain setup                # configure Claude Code + Cursor
-teambrain setup slack          # wizard configuration Slack (2 étapes)
+teambrain setup slack          # wizard configuration Slack — génère un app manifest à coller sur api.slack.com
 teambrain bot                  # lance le chat bot Slack
-teambrain bot --check          # vérifie la config sans lancer le bot
+teambrain bot --check          # vérifie token, DM lead, présence réelle dans chaque canal
 teambrain bot --confidence 0.7 # seuil de confiance personnalisé
 teambrain scan-commits                          # scanne les commits git récents (défaut : 1 semaine)
 teambrain scan-commits --depuis 3m --confiance 0.8  # période et seuil personnalisés
@@ -83,6 +88,8 @@ teambrain scan-code --no-ai                     # matchs bruts sans scoring Olla
 - **Module 2** : ✅ MCP server + sqlite-vec + mapping chemin→modules
 - **Module 3** : ✅ Chat bot — Socket Mode Slack + Block Kit + patterns + scoring Ollama + PR GitHub
 - **Module 4** : ✅ Git/Code mining — scan-commits + scan-code + scoring Ollama + boucle interactive
+- **Audit sécurité/qualité** : ✅ 14 corrections (2026-05-14) — injection format string, permissions tokens, race condition threading, etc.
+- **Améliorations Slack** : ✅ wizard manifest + check canaux réel + persistance proposals (2026-05-14)
 
 ## Module 3 — Chat Bot
 
@@ -100,6 +107,10 @@ class ChatPlatformAdapter(ABC):
 
 Première implémentation : `SlackAdapter` avec Socket Mode (WebSocket local) + Block Kit interactif.
 
+### Wizard de configuration
+
+`teambrain setup slack` génère un **app manifest Slack** prêt à coller sur `api.slack.com` (From an app manifest). Scopes OAuth, Event Subscriptions, Socket Mode et Interactivity sont préconfigurés automatiquement — l'utilisateur n'a plus qu'à coller le manifest, générer les tokens et inviter le bot dans ses canaux.
+
 ### Flux de détection
 
 1. **Écoute** : Socket Mode capte tous les messages des canaux
@@ -107,6 +118,8 @@ Première implémentation : `SlackAdapter` avec Socket Mode (WebSocket local) + 
 3. **Scoring** : Ollama évalue si c'est vraiment une décision architecturale + confidence
 4. **Proposition** : DM au tech lead avec boutons Block Kit (Valider / Éditer / Ignorer)
 5. **Validation** : Action → sauvegarde ADR + création PR GitHub (optionnel)
+
+Les propositions en attente sont **persistées** dans `.decisions/.teambrain_pending.json` — elles survivent aux redémarrages du bot.
 
 ### Configuration
 
@@ -219,12 +232,12 @@ Exemple pour un repo style Conventional Commits français (ex: SAND) :
 **Module 3** :
 - Socket Mode : `SocketModeClient.connect()` est non-blocking → `threading.Event().wait()` pour maintenir le process vivant.
 - Block Kit payload : le user ID est dans `payload["user"]["id"]`, pas `payload["user_id"]` (piège confirmé en test live).
-- `_pending` est en mémoire : perdu au redémarrage. Les propositions en attente deviennent orphelines après un restart.
-- Le bot doit être **invité dans chaque canal** via `/invite @BotName` — sans ça, Socket Mode ne livre pas les messages même avec les bons scopes et event subscriptions.
-- Scopes OAuth requis : `channels:read channels:history groups:read groups:history im:history chat:write im:write users:read`. Oublier `channels:read` ou `groups:read` empêche la réception des événements.
+- `_pending` est persisté dans `.decisions/.teambrain_pending.json` — rechargé au démarrage. Les vieux DM Block Kit restent actifs après un restart.
+- Le bot doit être **invité dans chaque canal** via `/invite @BotName` — `teambrain bot --check` vérifie maintenant la présence réelle (✓/✗ par canal).
+- Scopes OAuth requis : `channels:read channels:history groups:read groups:history im:history chat:write im:write users:read`. Oublier `channels:read` ou `groups:read` empêche la réception des événements. Le wizard `setup slack` les configure automatiquement via le manifest.
 - Ollama scoring : ~500ms par message. Pour <50 msg/jour c'est OK, au-delà envisager un cache ou batch.
 - Token expiration : Slack bot tokens ne se renouvellent pas automatiquement. Relancer le bot en cas de 401.
-- `teambrain bot --check` pour diagnostiquer avant de lancer (vérifie token, DM lead, liste les canaux à inviter).
+- `teambrain bot --check` pour diagnostiquer avant de lancer (vérifie token, présence dans les canaux via `conversations_list`, DM lead).
 
 **Module 4** :
 - `_depuis_vers_git` utilise `re.fullmatch(r"(\d+)([wmy])")` — le suffixe `y` de `"yesterday"` ne matche pas car il n'est pas précédé d'un chiffre (piège évité par le fullmatch).
