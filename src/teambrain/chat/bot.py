@@ -97,6 +97,52 @@ class DecisionBot:
         self._github_creator = github_creator
         self._pending: dict[str, PendingProposal] = {}
         self._lock = threading.Lock()
+        self._pending_path = decisions_dir / ".teambrain_pending.json"
+        self._load_pending()
+
+    def _pending_to_dict(self) -> dict:
+        """Sérialise _pending en dict JSON-serialisable."""
+        result = {}
+        for pid, prop in self._pending.items():
+            adr = prop.adr
+            result[pid] = {
+                "proposal_id": prop.proposal_id,
+                "message_ts": prop.message_ts,
+                "adr": {
+                    "id": adr.id, "titre": adr.titre, "date": adr.date.isoformat(),
+                    "statut": adr.statut, "modules": adr.modules, "decideurs": adr.decideurs,
+                    "contexte": adr.contexte, "decision": adr.decision, "consequences": adr.consequences,
+                },
+            }
+        return result
+
+    def _save_pending(self) -> None:
+        """Persiste _pending sur disque (appelé sous self._lock)."""
+        try:
+            self._pending_path.write_text(
+                json.dumps(self._pending_to_dict(), indent=2, ensure_ascii=False),
+                encoding="utf-8",
+            )
+        except OSError as exc:
+            logger.warning("Impossible de sauvegarder _pending : %s", exc)
+
+    def _load_pending(self) -> None:
+        """Charge _pending depuis disque au démarrage."""
+        if not self._pending_path.exists():
+            return
+        try:
+            data = json.loads(self._pending_path.read_text(encoding="utf-8"))
+            for pid, item in data.items():
+                d = item["adr"]
+                adr = ADR(
+                    id=d["id"], titre=d["titre"], date=date.fromisoformat(d["date"]),
+                    statut=d["statut"], modules=d["modules"], decideurs=d["decideurs"],
+                    contexte=d["contexte"], decision=d["decision"], consequences=d["consequences"],
+                )
+                self._pending[pid] = PendingProposal(item["proposal_id"], item["message_ts"], adr)
+            logger.info("%d proposition(s) en attente rechargée(s) depuis disque.", len(self._pending))
+        except Exception as exc:
+            logger.warning("Impossible de charger _pending : %s — fichier ignoré.", exc)
 
     def run(self, channels: list[str]) -> None:
         """Lance le bot : écoute les canaux et traite les messages/actions."""
@@ -139,6 +185,7 @@ class DecisionBot:
 
             logger.info("Proposition envoyée (ts=%s) — en attente de validation", message_ts)
             self._pending[proposal_id] = PendingProposal(proposal_id, message_ts, adr)
+            self._save_pending()
 
     def _generate_draft(self, qual: dict, msg: Message) -> ADR:
         """Crée un brouillon d'ADR à partir de la qualification Ollama."""
@@ -177,6 +224,7 @@ class DecisionBot:
         proposal_id = action_id.replace("validate_", "", 1)
         with self._lock:
             proposal = self._pending.pop(proposal_id, None)
+            self._save_pending()
         if not proposal:
             return
 
@@ -215,6 +263,7 @@ class DecisionBot:
         proposal_id = action_id.replace("ignore_", "", 1)
         with self._lock:
             self._pending.pop(proposal_id, None)
+            self._save_pending()
 
     def _adr_to_markdown(self, adr: ADR) -> str:
         """Convertit un ADR en markdown frontmatter (compatible avec from_post)."""

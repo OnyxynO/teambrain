@@ -64,13 +64,15 @@ def init():
     save_config(decisions_dir, {})
 
     gitignore = cwd / ".gitignore"
-    db_entry = ".decisions/*.db\n"
+    gitignore_entries = [".decisions/*.db", ".decisions/.teambrain_pending.json"]
     if gitignore.exists():
-        if db_entry.strip() not in gitignore.read_text():
+        content = gitignore.read_text()
+        additions = [e for e in gitignore_entries if e not in content]
+        if additions:
             with gitignore.open("a") as f:
-                f.write("\n" + db_entry)
+                f.write("\n" + "\n".join(additions) + "\n")
     else:
-        gitignore.write_text(db_entry)
+        gitignore.write_text("\n".join(gitignore_entries) + "\n")
 
     console.print(f"[green]✓[/green] .decisions/ créé dans {cwd}")
     console.print("[dim]Lance [bold]teambrain add[/bold] pour créer ton premier ADR.[/dim]")
@@ -279,46 +281,70 @@ def _setup_mcp() -> None:
         console.print_json(json.dumps({"mcpServers": {"teambrain": entry}}, indent=2))
 
 
+def _slack_app_manifest(app_name: str = "TeamBrain") -> dict:
+    """Génère le manifest Slack pour création automatique de l'app."""
+    return {
+        "display_information": {"name": app_name},
+        "features": {
+            "bot_user": {"display_name": app_name, "always_online": False}
+        },
+        "oauth_config": {
+            "scopes": {
+                "bot": [
+                    "channels:read", "channels:history",
+                    "groups:read", "groups:history",
+                    "im:history", "chat:write", "im:write", "users:read",
+                ]
+            }
+        },
+        "settings": {
+            "event_subscriptions": {
+                "bot_events": ["message.channels", "message.groups"]
+            },
+            "interactivity": {"is_enabled": True},
+            "socket_mode_enabled": True,
+            "token_rotation_enabled": False,
+        },
+    }
+
+
 def _setup_slack() -> None:
-    """Wizard de configuration Slack — 2 étapes."""
+    """Wizard de configuration Slack — manifest + tokens."""
     import json
 
     console.print(
         Panel(
             "[bold]Configuration Slack — TeamBrain Chat Bot[/bold]\n"
-            "[dim]2 étapes : instructions de setup, puis collecte des tokens.\n"
-            "Ctrl+C à tout moment pour annuler.[/dim]",
+            "[dim]Ctrl+C à tout moment pour annuler.[/dim]",
             border_style="blue",
         )
     )
 
     try:
-        # ── Étape 1 : toutes les instructions en une fois ──────────────────────
+        app_name = typer.prompt("Nom de l'app Slack", default="TeamBrain")
+        manifest = _slack_app_manifest(app_name)
+        manifest_json = json.dumps(manifest, indent=2, ensure_ascii=False)
+
+        # ── Étape 1 : manifest ─────────────────────────────────────────────────
         console.print(
             Panel(
-                "[bold]Étape 1 — Créer et configurer l'app Slack[/bold]\n\n"
-                "1. [cyan]https://api.slack.com/apps?new_app=1[/cyan]\n"
-                "   → « From scratch » · nom (ex: TeamBrain) · choisis ton workspace\n\n"
-                "2. [bold]Socket Mode[/bold]  Settings > Socket Mode\n"
-                "   → Activer · générer un App-Level Token avec scope [cyan]connections:write[/cyan]\n\n"
-                "3. [bold]Scopes OAuth[/bold]  OAuth & Permissions > Bot Token Scopes\n"
-                "   → [cyan]channels:read  channels:history[/cyan]\n"
-                "   → [cyan]groups:read  groups:history[/cyan]\n"
-                "   → [cyan]im:history  chat:write  im:write  users:read[/cyan]\n\n"
-                "4. [bold]Event Subscriptions[/bold]  Features > Event Subscriptions\n"
-                "   → Activer · Subscribe to Bot Events :\n"
-                "   → [cyan]message.channels[/cyan]  [cyan]message.groups[/cyan]\n\n"
-                "5. [bold]Interactivity[/bold]  Features > Interactivity & Shortcuts\n"
-                "   → Activer (pas d'URL requise en Socket Mode)\n\n"
-                "6. [bold]Installer[/bold]  OAuth & Permissions > Install to Workspace\n"
-                "   → Autorise l'app et copie le [bold]Bot User OAuth Token[/bold] ([cyan]xoxb-...[/cyan])\n\n"
-                "7. [bold]Inviter le bot dans tes canaux[/bold]\n"
-                "   → Dans chaque canal à surveiller, tape : [cyan]/invite @NomDeTonBot[/cyan]\n"
-                "   [dim](Sans invitation, le bot ne reçoit pas les messages même avec les bons scopes.)[/dim]",
+                "[bold]Étape 1 — Créer l'app depuis le manifest[/bold]\n\n"
+                "1. Ouvrir : [cyan]https://api.slack.com/apps?new_app=1[/cyan]\n"
+                "   → Choisir [bold]« From an app manifest »[/bold]\n"
+                "   → Sélectionner ton workspace\n"
+                "   → Coller le manifest ci-dessous → Suivant → Créer\n\n"
+                "2. [bold]App-Level Token[/bold]  Settings > Socket Mode → Activer\n"
+                "   → « Generate an app-level token » · scope [cyan]connections:write[/cyan]\n"
+                "   → Copier le token ([cyan]xapp-...[/cyan])\n\n"
+                "3. [bold]Bot Token[/bold]  OAuth & Permissions > Install to Workspace\n"
+                "   → Autoriser → copier le Bot User OAuth Token ([cyan]xoxb-...[/cyan])\n\n"
+                "4. [bold]Inviter le bot[/bold] dans chaque canal à surveiller\n"
+                "   → [cyan]/invite @" + app_name + "[/cyan]",
                 border_style="yellow",
             )
         )
-        typer.confirm("App configurée et installée ?", abort=True)
+        console.print(Panel(manifest_json, title="[bold]Manifest — à coller sur api.slack.com[/bold]", border_style="cyan"))
+        typer.confirm("App créée et installée ?", abort=True)
 
         # ── Étape 2 : collecte des tokens ─────────────────────────────────────
         console.print("\n[bold]Étape 2 — Tokens et canaux[/bold]\n")
@@ -417,16 +443,28 @@ def _check_slack(bot_token: str, lead_id: str | None, channels: list[str]) -> No
         console.print(f"[red]✗[/red] Token invalide : {e}")
         raise typer.Exit(1)
 
-    # 2. Canaux configurés
+    # 2. Présence du bot dans chaque canal (vérification réelle)
+    bot_name = auth.get("user", "TeamBrain")
     if not channels:
         console.print("[red]✗[/red] Aucun canal configuré dans .decisions/.teambrain.json")
         ok = False
     else:
-        console.print(f"[green]✓[/green] Canaux configurés : {', '.join(channels)}")
-        console.print(
-            "[yellow]![/yellow] Vérifie que le bot est invité dans chaque canal :\n"
-            + "\n".join(f"   [dim]Dans {c} → tape[/dim] [cyan]/invite @{auth.get('user', 'TeamBrain')}[/cyan]" for c in channels)
-        )
+        # Récupérer les canaux où le bot est membre
+        try:
+            resp = client.conversations_list(exclude_archived=True, limit=500)
+            joined = {ch["name"] for ch in resp.get("channels", []) if ch.get("is_member")}
+        except Exception:
+            joined = set()
+
+        for canal in channels:
+            name = canal.lstrip("#")
+            if joined and name in joined:
+                console.print(f"[green]✓[/green] Bot présent dans {canal}")
+            elif not joined:
+                console.print(f"[yellow]![/yellow] Impossible de vérifier {canal} (scope conversations:list requis)")
+            else:
+                console.print(f"[red]✗[/red] Bot absent de {canal} — tape [cyan]/invite @{bot_name}[/cyan] dans ce canal")
+                ok = False
 
     # 3. DM test au lead
     if lead_id:
