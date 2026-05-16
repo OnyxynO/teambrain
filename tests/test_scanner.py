@@ -124,11 +124,11 @@ LOG_GIT_SIMULE = (
 )
 
 
-def _mock_score_decision(texte, model):
+def _mock_score_decision(texte, model, semanticmatch_url=None):
     return {"est_decision": True, "confiance": 0.9, "resume": "Choix de PostgreSQL"}
 
 
-def _mock_score_pas_decision(texte, model):
+def _mock_score_pas_decision(texte, model, semanticmatch_url=None):
     return {"est_decision": False, "confiance": 0.2, "resume": ""}
 
 

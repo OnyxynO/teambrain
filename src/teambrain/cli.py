@@ -660,24 +660,28 @@ def scan_commits(
     confiance: float = typer.Option(0.7, "--confiance", help="Seuil de confiance IA (0-1)"),
     no_ai: bool = typer.Option(False, "--no-ai", help="Retourner tous les matchs bruts sans scoring IA"),
     pattern: list[str] = typer.Option([], "--pattern", "-p", help="Pattern supplémentaire (répétable)"),
+    semanticmatch: bool = typer.Option(False, "--semanticmatch", help="Utiliser SemanticMatch (Haiku) au lieu d'Ollama"),
 ):
     """Scanne les commits git récents pour détecter des décisions non documentées."""
     decisions_dir = _require_dir()
     config = load_config(decisions_dir)
     chemin_repo = decisions_dir.parent
+    sm_url = config.get("semanticmatch_url") if semanticmatch else None
 
     patterns_extra = list(pattern) + config.get("commit_patterns", [])
     if patterns_extra:
         console.print(f"[dim]Patterns supplémentaires : {', '.join(patterns_extra)}[/dim]")
-    console.print(f"[dim]Scan des commits depuis {depuis} (confiance min : {int(confiance * 100)}%)…[/dim]")
+    backend = f"SemanticMatch ({sm_url})" if sm_url else f"Ollama ({config['model']})"
+    console.print(f"[dim]Scan des commits depuis {depuis} (confiance min : {int(confiance * 100)}%, backend : {backend})…[/dim]")
 
     try:
         candidats = scanner_commits(
             chemin_repo, depuis, config["model"], confiance,
             score_ia=not no_ai,
             patterns_extra=patterns_extra or None,
+            semanticmatch_url=sm_url,
         )
-    except RuntimeError as exc:
+    except (RuntimeError, ConnectionError) as exc:
         err.print(f"[red]Erreur :[/red] {exc}")
         raise typer.Exit(1)
 
@@ -697,20 +701,27 @@ def scan_code(
     pattern: list[str] = typer.Option([], "--pattern", "-p", help="Pattern supplémentaire à chercher (répétable)"),
     confiance: float = typer.Option(0.8, "--confiance", help="Seuil de confiance IA (0-1)"),
     no_ai: bool = typer.Option(False, "--no-ai", help="Retourner tous les matchs bruts sans scoring IA"),
+    semanticmatch: bool = typer.Option(False, "--semanticmatch", help="Utiliser SemanticMatch (Haiku) au lieu d'Ollama"),
 ):
     """Scanne les fichiers du repo pour détecter des marqueurs décisionnels dans les commentaires."""
     decisions_dir = _require_dir()
     config = load_config(decisions_dir)
     chemin_repo = decisions_dir.parent
+    sm_url = config.get("semanticmatch_url") if semanticmatch else None
 
     patterns_extra = list(pattern) + config.get("code_patterns", [])
     if patterns_extra:
         console.print(f"[dim]Patterns supplémentaires : {', '.join(patterns_extra)}[/dim]")
-    console.print(f"[dim]Scan du code (confiance min : {int(confiance * 100)}%)…[/dim]")
+    backend = f"SemanticMatch ({sm_url})" if sm_url else f"Ollama ({config['model']})"
+    console.print(f"[dim]Scan du code (confiance min : {int(confiance * 100)}%, backend : {backend})…[/dim]")
 
     try:
-        candidats = scanner_code(chemin_repo, patterns_extra or None, config["model"], confiance, score_ia=not no_ai)
-    except RuntimeError as exc:
+        candidats = scanner_code(
+            chemin_repo, patterns_extra or None, config["model"], confiance,
+            score_ia=not no_ai,
+            semanticmatch_url=sm_url,
+        )
+    except (RuntimeError, ConnectionError) as exc:
         err.print(f"[red]Erreur :[/red] {exc}")
         raise typer.Exit(1)
 

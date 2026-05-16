@@ -7,6 +7,7 @@ CONFIG_FILENAME = ".teambrain.json"
 DEFAULT_CONFIG = {
     "model": "qwen3:1.7b",
     "embedding_model": "qwen3-embedding:0.6b",
+    "semanticmatch_url": "http://localhost:8001",
     "module_mappings": {},
     "commit_patterns": [],
     "code_patterns": [],

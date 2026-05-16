@@ -16,6 +16,8 @@ from typing import Literal
 
 import ollama
 
+from . import semanticmatch as sm
+
 logger = logging.getLogger(__name__)
 
 # ──────────────────────────────────────────────────────────────
@@ -115,14 +117,17 @@ Réponds avec exactement ce JSON :
 }"""
 
 
-def score_candidat(texte: str, model: str) -> dict:
-    """Évalue via Ollama si le texte contient une décision architecturale.
+def score_candidat(texte: str, model: str, semanticmatch_url: str | None = None) -> dict:
+    """Évalue si le texte contient une décision architecturale.
 
-    Retourne un dict avec les clés : est_decision (bool), confiance (float),
-    resume (str).
+    Utilise SemanticMatch (Haiku) si `semanticmatch_url` est fourni, sinon Ollama.
 
-    Lève ValueError si la réponse JSON est malformée et irrécupérable.
+    Retourne un dict avec les clés : est_decision (bool), confiance (float), resume (str).
+    Lève ValueError ou ConnectionError en cas d'erreur irrécupérable.
     """
+    if semanticmatch_url:
+        return sm.classifier(texte[:500], semanticmatch_url)
+
     texte_tronque = texte[:500]
     user_content = f"Texte à analyser (limité à 500 caractères) :\n{texte_tronque}" + _USER_SCORE_SUFFIX
     response = ollama.chat(
@@ -145,7 +150,6 @@ def score_candidat(texte: str, model: str) -> dict:
     except json.JSONDecodeError as exc:
         raise ValueError(f"Réponse JSON malformée : {exc}\nContenu : {content!r}") from exc
 
-    # Normalisation des types pour éviter les surprises
     return {
         "est_decision": bool(resultat.get("est_decision", False)),
         "confiance": float(resultat.get("confiance", 0.0)),
@@ -164,6 +168,7 @@ def scanner_commits(
     confiance_min: float = 0.7,
     score_ia: bool = True,
     patterns_extra: list[str] | None = None,
+    semanticmatch_url: str | None = None,
 ) -> list[Candidat]:
     """Scanne les commits git depuis `depuis` et retourne les candidats décisionnels.
 
@@ -225,7 +230,7 @@ def scanner_commits(
         # Scoring IA
         ref = hash_commit[:8]
         try:
-            score = score_candidat(sujet, model)
+            score = score_candidat(sujet, model, semanticmatch_url)
         except (ValueError, ollama.ResponseError, ConnectionError) as exc:
             logger.warning(f"Score ignoré pour '{ref}' : {exc}")
             continue
@@ -266,6 +271,7 @@ def scanner_code(
     confiance_min: float = 0.8,
     score_ia: bool = True,
     max_candidats: int = 200,
+    semanticmatch_url: str | None = None,
 ) -> list[Candidat]:
     """Scanne les fichiers texte du repo à la recherche de marqueurs décisionnels.
 
@@ -324,7 +330,7 @@ def scanner_code(
 
             # Scoring IA
             try:
-                score = score_candidat(texte, model)
+                score = score_candidat(texte, model, semanticmatch_url)
             except (ValueError, ollama.ResponseError, ConnectionError) as exc:
                 logger.warning(f"Score ignoré pour '{ref}' : {exc}")
                 continue
