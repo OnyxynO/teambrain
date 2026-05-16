@@ -1,9 +1,9 @@
 # TeamBrain — CLAUDE.md
 
-@../../PRINCIPES.md
+@../../../PRINCIPES.md
 
 ADR git-natif + MCP server mémoire décisionnelle d'équipe.
-Spec complète : `../../_ideas/TeamBrain/PROPOSITION.md`
+Spec complète : `../../../_ideas/TeamBrain/PROPOSITION.md`
 
 ## Stack
 
