@@ -12,7 +12,7 @@ from rich.table import Table
 from .adr import ADR, _to_markdown, from_post, list_adrs, next_id, save_adr, search_adrs
 from .ai import generate_draft
 from .config import find_decisions_dir, load_config, save_config
-from .scanner import Candidat, scanner_commits, scanner_code
+from .scanner import Candidat, scanner_commits, scanner_code, scanner_commits_semantique
 
 app = typer.Typer(no_args_is_help=True, help="TeamBrain — mémoire décisionnelle d'équipe, git-native.")
 console = Console()
@@ -593,6 +593,7 @@ def _afficher_candidat(candidat: Candidat) -> None:
         f"[bold]{candidat.source.upper()}[/bold] · [dim]{candidat.ref}[/dim]"
         + (f" · {date_str}" if date_str != "—" else "")
         + (f" · {auteur_str}" if auteur_str != "—" else "")
+        + (f" · [cyan][ADR #{candidat.adr_lie}][/cyan]" if candidat.adr_lie is not None else "")
         + f"\n\n[italic]{candidat.texte[:300]}[/italic]"
         + (f"\n\n[bold]Résumé :[/bold] {candidat.resume}" if candidat.resume else "")
         + f"\n\n[{couleur_conf}]Confiance : {pourcent}%[/{couleur_conf}]"
@@ -661,11 +662,38 @@ def scan_commits(
     no_ai: bool = typer.Option(False, "--no-ai", help="Retourner tous les matchs bruts sans scoring IA"),
     pattern: list[str] = typer.Option([], "--pattern", "-p", help="Pattern supplémentaire (répétable)"),
     semanticmatch: bool = typer.Option(False, "--semanticmatch", help="Utiliser SemanticMatch (Haiku) au lieu d'Ollama"),
+    semantic: bool = typer.Option(False, "--semantic", help="Mode sémantique : compare via l'index ADR (sans patterns regex)"),
 ):
     """Scanne les commits git récents pour détecter des décisions non documentées."""
     decisions_dir = _require_dir()
     config = load_config(decisions_dir)
     chemin_repo = decisions_dir.parent
+
+    # ── Mode sémantique : comparaison directe contre l'index ADR ──────────────
+    if semantic:
+        if no_ai or pattern or semanticmatch:
+            console.print("[yellow]Avertissement : --no-ai, --pattern et --semanticmatch sont ignorés en mode --semantic.[/yellow]")
+        console.print("[dim]Mode sémantique — comparaison contre l'index ADR…[/dim]")
+        try:
+            candidats = scanner_commits_semantique(
+                chemin_repo, decisions_dir, config, depuis=depuis,
+            )
+        except RuntimeError as exc:
+            err.print(f"[red]Erreur :[/red] {exc}")
+            raise typer.Exit(1)
+
+        if not candidats:
+            console.print("[dim]Aucun candidat trouvé.[/dim]")
+            return
+
+        console.print(f"[bold]{len(candidats)} candidat(s) détecté(s).[/bold]\n")
+        nb_crees = _traiter_candidats(candidats, decisions_dir, config)
+        console.print(
+            f"\n[bold]{len(candidats)} candidats analysés, {nb_crees} ADR créés.[/bold]"
+        )
+        return
+
+    # ── Mode classique : patterns regex + scoring IA ───────────────────────────
     sm_url = config.get("semanticmatch_url") if semanticmatch else None
 
     patterns_extra = list(pattern) + config.get("commit_patterns", [])

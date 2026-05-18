@@ -13,6 +13,7 @@ from teambrain.scanner import (
     score_candidat,
     scanner_commits,
     scanner_code,
+    scanner_commits_semantique,
 )
 
 
@@ -289,3 +290,99 @@ def test_scanner_code_patterns_extra():
 
     assert len(candidats) == 1
     assert "config.py" in candidats[0].ref
+
+
+# ──────────────────────────────────────────────────────────────
+# scanner_commits_semantique (Module 5)
+# ──────────────────────────────────────────────────────────────
+
+LOG_GIT_SEMANTIQUE = (
+    "aaa11111\t2026-05-10\tAlice Dupont\tchoisir sqlite-vec pour l'index vectoriel local\n"
+    "bbb22222\t2026-05-11\tBob Martin\tfix: corriger le padding du bouton principal\n"
+)
+
+
+def test_scanner_semantique_retient_proche():
+    """Un commit dont la distance à un ADR est <= seuil est retenu avec adr_lie et confiance corrects."""
+    mock_run = MagicMock()
+    mock_run.returncode = 0
+    mock_run.stdout = LOG_GIT_SEMANTIQUE
+
+    # search_semantic retourne [(adr_id=3, distance=0.2)] pour le premier commit,
+    # puis [(adr_id=3, distance=0.2)] pour le second — les deux sont proches
+    # mais on vérifie surtout les valeurs calculées
+    with patch("teambrain.scanner.subprocess.run", return_value=mock_run), \
+         patch("teambrain.scanner.search_semantic", return_value=[(3, 0.2)]), \
+         patch("teambrain.scanner.Path.exists", return_value=True):
+        candidats = scanner_commits_semantique(
+            Path("/fake/repo"),
+            Path("/fake/repo/.decisions"),
+            {},
+            depuis="1w",
+            seuil_distance=0.3,
+        )
+
+    # Les deux commits passent le seuil 0.3 (distance 0.2 <= 0.3)
+    assert len(candidats) == 2
+    assert candidats[0].adr_lie == 3
+    assert candidats[0].confiance == pytest.approx(0.8)
+    assert candidats[0].ref == "aaa11111"
+    assert candidats[0].source == "commit"
+    assert "ADR #3" in candidats[0].resume
+    assert "0.200" in candidats[0].resume
+
+
+def test_scanner_semantique_exclut_distant():
+    """Un commit dont la distance dépasse le seuil est exclu."""
+    mock_run = MagicMock()
+    mock_run.returncode = 0
+    mock_run.stdout = "aaa11111\t2026-05-10\tAlice\tchoisir sqlite-vec\n"
+
+    with patch("teambrain.scanner.subprocess.run", return_value=mock_run), \
+         patch("teambrain.scanner.search_semantic", return_value=[(3, 0.8)]), \
+         patch("teambrain.scanner.Path.exists", return_value=True):
+        candidats = scanner_commits_semantique(
+            Path("/fake/repo"),
+            Path("/fake/repo/.decisions"),
+            {},
+            depuis="1w",
+            seuil_distance=0.3,
+        )
+
+    assert candidats == []
+
+
+def test_scanner_semantique_index_absent(tmp_path):
+    """Si le fichier teambrain.db est absent, RuntimeError est levée avant la boucle."""
+    mock_run = MagicMock()
+    mock_run.returncode = 0
+    mock_run.stdout = "aaa11111\t2026-05-10\tAlice\tchoisir sqlite-vec\n"
+
+    # tmp_path est un répertoire vide — pas de teambrain.db dedans
+    with patch("teambrain.scanner.subprocess.run", return_value=mock_run):
+        with pytest.raises(RuntimeError, match="Index absent"):
+            scanner_commits_semantique(
+                tmp_path,
+                tmp_path,  # decisions_dir sans teambrain.db
+                {},
+            )
+
+
+def test_scanner_semantique_no_commits():
+    """Si git log ne retourne aucune ligne non vide, la liste est vide sans erreur."""
+    mock_run = MagicMock()
+    mock_run.returncode = 0
+    mock_run.stdout = "\n   \n"  # lignes vides uniquement
+
+    with patch("teambrain.scanner.subprocess.run", return_value=mock_run), \
+         patch("teambrain.scanner.search_semantic") as mock_search, \
+         patch("teambrain.scanner.Path.exists", return_value=True):
+        candidats = scanner_commits_semantique(
+            Path("/fake/repo"),
+            Path("/fake/repo/.decisions"),
+            {},
+        )
+
+    # Aucun commit → search_semantic jamais appelé, liste vide, pas d'erreur
+    mock_search.assert_not_called()
+    assert candidats == []

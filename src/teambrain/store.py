@@ -29,7 +29,7 @@ def _open_db(db_path: Path, dim: int) -> sqlite3.Connection:
         sqlite_vec.load(db)
     finally:
         db.enable_load_extension(False)
-    db.execute(f"CREATE VIRTUAL TABLE IF NOT EXISTS adr_vecs USING vec0(embedding float[{dim}])")
+    db.execute(f"CREATE VIRTUAL TABLE IF NOT EXISTS adr_vecs USING vec0(embedding float[{dim}] distance_metric=cosine)")
     db.commit()
     return db
 

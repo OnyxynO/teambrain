@@ -12,11 +12,12 @@ import subprocess
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
-from typing import Literal
+from typing import Callable, Literal
 
 import ollama
 
 from . import semanticmatch as sm
+from .store import search_semantic
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +35,7 @@ class Candidat:
     confiance: float = 0.0
     date_commit: date | None = None
     auteur: str | None = None
+    adr_lie: int | None = None      # ID de l'ADR le plus proche (mode sémantique)
 
 
 # ──────────────────────────────────────────────────────────────
@@ -347,5 +349,99 @@ def scanner_code(
                 date_commit=None,
                 auteur=None,
             ))
+
+    return candidats
+
+
+# ──────────────────────────────────────────────────────────────
+# Scanner sémantique (Module 5)
+# ──────────────────────────────────────────────────────────────
+
+def scanner_commits_semantique(
+    chemin_repo: Path,
+    decisions_dir: Path,
+    config: dict,
+    depuis: str = "1w",
+    seuil_distance: float = 0.3,
+    embed_fn: Callable[[str], list[float]] | None = None,
+) -> list[Candidat]:
+    """Scanne les commits git par similarité sémantique avec l'index ADR existant.
+
+    Au lieu de comparer sur des patterns regex, chaque commit est comparé
+    directement à l'index sqlite-vec via les embeddings Ollama.
+
+    Args:
+        chemin_repo: Racine du dépôt git.
+        decisions_dir: Répertoire .decisions/ contenant l'index vectoriel.
+        config: Configuration du repo (embedding_model, etc.).
+        depuis: Durée ou date de début ("1w", "3m", "2026-01-01"…).
+        seuil_distance: Distance cosinus maximale (métrique configurée dans store.py)
+            pour retenir un candidat (0-1). Une distance faible signifie une forte
+            similarité. Défaut : 0.3 (calibrage cosine — 0=identique, 1=orthogonal).
+        embed_fn: Fonction d'embedding personnalisée (utile pour les tests).
+
+    Returns:
+        Liste de Candidat dont la distance avec un ADR est <= seuil_distance.
+
+    Raises:
+        RuntimeError: Si git log échoue ou si l'index ADR est absent.
+    """
+    since = _depuis_vers_git(depuis)
+    # Format identique à scanner_commits : hash<TAB>date ISO<TAB>auteur<TAB>sujet
+    git_format = "%H\t%as\t%an\t%s"
+    resultat_git = subprocess.run(
+        ["git", "log", f"--since={since}", f"--format={git_format}"],
+        cwd=chemin_repo,
+        capture_output=True,
+        text=True,
+    )
+    if resultat_git.returncode != 0:
+        raise RuntimeError(f"Erreur git log : {resultat_git.stderr.strip()}")
+
+    lignes = [ligne for ligne in resultat_git.stdout.splitlines() if ligne.strip()]
+    candidats: list[Candidat] = []
+
+    # Vérification explicite de la présence du fichier DB avant de démarrer la boucle
+    db_path = decisions_dir / "teambrain.db"
+    if not db_path.exists():
+        raise RuntimeError("Index absent — lancer 'teambrain index' d'abord")
+
+    for ligne in lignes:
+        parties = ligne.split("\t", 3)
+        if len(parties) < 4:
+            continue
+        hash_commit, date_str, auteur, sujet = parties
+
+        # Recherche sémantique dans l'index ADR
+        voisins = search_semantic(sujet, decisions_dir, config, k=1, embed_fn=embed_fn)
+
+        # L'index peut ne retourner aucun voisin pour ce commit en particulier — ce n'est pas une erreur
+        if not voisins:
+            continue
+
+        adr_id, distance = voisins[0]
+
+        # Filtrage par seuil de distance : distance faible = commits proches sémantiquement
+        if distance > seuil_distance:
+            continue
+
+        try:
+            date_obj = date.fromisoformat(date_str)
+        except ValueError:
+            date_obj = None
+
+        # La confiance est l'inverse de la distance, normalisée entre 0 et 1
+        confiance = max(0.0, min(1.0, 1.0 - distance))
+
+        candidats.append(Candidat(
+            source="commit",
+            ref=hash_commit[:8],
+            texte=sujet,
+            resume=f"Proche de l'ADR #{adr_id} (distance : {distance:.3f})",
+            confiance=confiance,
+            date_commit=date_obj,
+            auteur=auteur or None,
+            adr_lie=adr_id,
+        ))
 
     return candidats

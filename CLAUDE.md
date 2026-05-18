@@ -47,7 +47,7 @@ tests/
 ├── test_store.py     # 6 tests (embeddings mockés)
 ├── test_server.py    # 13 tests (résolution chemin → modules)
 ├── test_bot.py       # 15 tests (patterns, scoring, orchestration)
-└── test_scanner.py   # 23 tests (Module 4 : _depuis_vers_git, score_candidat, scanner_commits, scanner_code, patterns_extra)
+└── test_scanner.py   # 27 tests (Module 4 : _depuis_vers_git, score_candidat, scanner_commits, scanner_code, patterns_extra + Module 5 : scanner_commits_semantique)
 ```
 
 ## Commandes dev
@@ -58,7 +58,7 @@ pip install -e ".[dev]"        # core + dev deps
 pip install -e ".[bot]"        # core + slack-sdk + PyGithub (pour Module 3)
 
 # Tests
-pytest                         # 74 tests
+pytest                         # 78 tests
 
 # CLI
 teambrain init                 # crée .decisions/ dans le repo courant
@@ -88,6 +88,7 @@ teambrain scan-code --no-ai                     # matchs bruts sans scoring Olla
 - **Module 2** : ✅ MCP server + sqlite-vec + mapping chemin→modules
 - **Module 3** : ✅ Chat bot — Socket Mode Slack + Block Kit + patterns + scoring Ollama + PR GitHub
 - **Module 4** : ✅ Git/Code mining — scan-commits + scan-code + scoring Ollama + boucle interactive
+- **Module 5** : ✅ Scanner sémantique — comparaison embeddings vs index ADR, flag --semantic, distance cosine
 - **Audit sécurité/qualité** : ✅ 14 corrections (2026-05-14) — injection format string, permissions tokens, race condition threading, etc.
 - **Améliorations Slack** : ✅ wizard manifest + check canaux réel + persistance proposals (2026-05-14)
 
@@ -112,26 +113,16 @@ TeamBrain est un **outil d'équipe multi-machine** — les composants n'ont pas 
 
 Ollama reste utilisé **localement** pour la génération de brouillons ADR (`teambrain add`) et les embeddings (`teambrain index`). Il n'est plus en chemin critique pour le scanner.
 
-### Module 5 — Scanner sémantique (bloqué sur SemanticMatch)
+### **Module 5** : ✅ Scanner sémantique — sqlite-vec local, `--semantic` sur `scan-commits`
 
-**Problème actuel** : le scanner (Module 4) utilise des patterns regex + scoring Ollama.
-- Les patterns sont language-specific (français seulement)
-- Ollama est trop conservateur sur les commits courts
-- Pas extensible à d'autres langues/styles de commit sans maintenance manuelle
+Le scanner sémantique compare chaque commit directement à l'index ADR via sqlite-vec (embeddings locaux Ollama), sans patterns regex ni SemanticMatch externe.
 
-**Direction décidée** : remplacer patterns+Ollama par similarité sémantique sur l'index ADR existant.
-- Les ADR déjà indexés dans sqlite-vec servent de corpus de référence
-- Un commit/commentaire est candidat s'il est proche sémantiquement d'un ADR existant
-- Le moteur de matching : **SemanticMatch** (service HTTP externe, voir `_ideas/SemanticMatch/`)
+- `scanner_commits_semantique(chemin_repo, decisions_dir, config, depuis, seuil_distance, embed_fn)` dans `scanner.py`
+- Flag CLI : `teambrain scan-commits --semantic`
+- Seuil par défaut : `seuil_distance=0.3` (distance cosine — 0=identique, 1=orthogonal)
+- Confiance calculée : `1.0 - distance` (normalisée 0-1)
 
-**Dépendance bloquante** : SemanticMatch doit être stable avant de modifier le scanner.
-
-**État** : en attente — ne pas modifier `scanner.py` avant que SemanticMatch soit opérationnel.
-
-### Ordre de développement
-
-1. **SemanticMatch** (`_ideas/SemanticMatch/`) — service HTTP Haiku, `POST /match` + `POST /classify`
-2. **Module 5 scanner sémantique** — intégrer SemanticMatch dans `scanner_commits` / `scanner_code`
+**Architecture** : l'index sqlite-vec est créé localement par `teambrain index`. Pas de dépendance réseau en mode sémantique.
 
 ## Module 3 — Chat Bot
 
@@ -291,3 +282,7 @@ Exemple pour un repo style Conventional Commits français (ex: SAND) :
 - `qwen3:1.7b` est très conservateur sur des commits courts sans contexte narratif — sur SAND (Conventional Commits), il n'en retient que 2/34 avec seuil 0.7. Préférer `--no-ai` + sélection manuelle pour les repos à messages de commit courts.
 - Le template `_USER` dans `ai.py` utilise `["liste", "des", "modules", "concernés"]` comme exemple de modules. qwen3:1.7b le prend parfois au pied de la lettre → corriger manuellement les ADR générés concernés.
 - `scan-commits` / `scan-code` ne sont pas interactifs via le préfixe `!` de Claude Code (stdin non connecté). Lancer dans un vrai terminal ou piper des réponses (`printf 'i\n%.0s' {1..50} | teambrain scan-commits`) pour afficher la liste sans créer d'ADR.
+
+**Module 5** :
+- Mode sémantique : `seuil_distance` est une distance cosine (0=identique, 1=orthogonal). Défaut : 0.3. L2 est désactivé dans `store.py` via `distance_metric=cosine` — sans cette déclaration explicite, sqlite-vec utilise L2 par défaut et les scores sont incorrects (Principe 18).
+- La vérification de l'index (`teambrain.db`) est faite **avant** la boucle des commits — une `RuntimeError` est levée immédiatement si le fichier est absent, sans attendre le premier commit.
