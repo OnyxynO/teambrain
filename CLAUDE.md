@@ -4,6 +4,7 @@
 
 ADR git-natif + MCP server mémoire décisionnelle d'équipe.
 Spec complète : `../../../_ideas/TeamBrain/PROPOSITION.md`
+Roadmap : `ROADMAP.md`
 
 ## Stack
 
@@ -91,6 +92,7 @@ teambrain scan-code --no-ai                     # matchs bruts sans scoring Olla
 - **Module 5** : ✅ Scanner sémantique — comparaison embeddings vs index ADR, flag --semantic, distance cosine
 - **Audit sécurité/qualité** : ✅ 14 corrections (2026-05-14) — injection format string, permissions tokens, race condition threading, etc.
 - **Améliorations Slack** : ✅ wizard manifest + check canaux réel + persistance proposals (2026-05-14)
+- **Module 6** : 📋 Interface web — cible non-devs (chef de projet, PO, designer) — voir `ROADMAP.md`
 
 ## Roadmap — prochaines évolutions
 
