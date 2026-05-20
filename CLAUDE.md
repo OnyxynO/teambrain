@@ -92,7 +92,7 @@ teambrain scan-code --no-ai                     # matchs bruts sans scoring Olla
 - **Module 5** : ✅ Scanner sémantique — comparaison embeddings vs index ADR, flag --semantic, distance cosine
 - **Audit sécurité/qualité** : ✅ 14 corrections (2026-05-14) — injection format string, permissions tokens, race condition threading, etc.
 - **Améliorations Slack** : ✅ wizard manifest + check canaux réel + persistance proposals (2026-05-14)
-- **Module 6** : 📋 Interface web — cible non-devs (chef de projet, PO, designer) — voir `ROADMAP.md`
+- **Module 6** : ✅ Interface web (2026-05-20) — API REST FastAPI (`teambrain serve --http`, port 8003) + frontend `teambrain-web/` (Next.js 16, port 3003). Routes : liste, détail, recherche, création guidée (brouillon Ollama). 25 tests API, 103 au total.
 
 ## Roadmap — prochaines évolutions
 
