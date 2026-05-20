@@ -5,16 +5,18 @@ import { StatutBadge } from "@/components/StatutBadge";
 import { FiltresADR } from "@/components/FiltresADR";
 
 interface PageProps {
-  searchParams: Promise<{ statut?: string; module?: string }>;
+  searchParams: Promise<{ projet?: string; statut?: string; module?: string }>;
 }
 
 export default async function PageListe({ searchParams }: PageProps) {
-  const { statut, module } = await searchParams;
+  const { projet, statut, module } = await searchParams;
 
   const [adrs, refs] = await Promise.all([
-    listerADR({ statut, module }).catch(() => []),
-    getReferentiels().catch(() => ({ modules: [], statuts: [] })),
+    listerADR({ projet, statut, module }).catch(() => []),
+    getReferentiels().catch(() => ({ modules: [], statuts: [], projets: [] })),
   ]);
+
+  const multiProjets = refs.projets.length > 1;
 
   return (
     <div className="space-y-6">
@@ -32,13 +34,17 @@ export default async function PageListe({ searchParams }: PageProps) {
       </div>
 
       <Suspense>
-        <FiltresADR statuts={refs.statuts} modules={refs.modules} />
+        <FiltresADR
+          statuts={refs.statuts}
+          modules={refs.modules}
+          projets={refs.projets}
+        />
       </Suspense>
 
       {adrs.length === 0 ? (
         <div className="text-center py-16 text-slate-400">
           <p className="text-lg">Aucun ADR trouvé</p>
-          {(statut || module) && (
+          {(projet || statut || module) && (
             <p className="text-sm mt-2">
               <Link href="/" className="text-indigo-600 hover:underline">
                 Effacer les filtres
@@ -53,6 +59,9 @@ export default async function PageListe({ searchParams }: PageProps) {
               <tr className="border-b border-slate-100 bg-slate-50">
                 <th className="text-left px-4 py-3 font-medium text-slate-500 w-12">#</th>
                 <th className="text-left px-4 py-3 font-medium text-slate-500">Titre</th>
+                {multiProjets && !projet && (
+                  <th className="text-left px-4 py-3 font-medium text-slate-500 w-28">Projet</th>
+                )}
                 <th className="text-left px-4 py-3 font-medium text-slate-500">Modules</th>
                 <th className="text-left px-4 py-3 font-medium text-slate-500 w-28">Statut</th>
                 <th className="text-left px-4 py-3 font-medium text-slate-500 w-28">Date</th>
@@ -61,7 +70,7 @@ export default async function PageListe({ searchParams }: PageProps) {
             <tbody>
               {adrs.map((adr) => (
                 <tr
-                  key={adr.id}
+                  key={`${adr.projet}-${adr.id}`}
                   className="border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors"
                 >
                   <td className="px-4 py-3 text-slate-400 font-mono text-xs">
@@ -69,12 +78,19 @@ export default async function PageListe({ searchParams }: PageProps) {
                   </td>
                   <td className="px-4 py-3">
                     <Link
-                      href={`/adr/${adr.id}`}
+                      href={`/adr/${adr.projet}/${adr.id}`}
                       className="font-medium text-slate-900 hover:text-indigo-600 transition-colors"
                     >
                       {adr.titre}
                     </Link>
                   </td>
+                  {multiProjets && !projet && (
+                    <td className="px-4 py-3">
+                      <span className="text-xs bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded font-medium">
+                        {adr.projet}
+                      </span>
+                    </td>
+                  )}
                   <td className="px-4 py-3 text-slate-500">
                     {adr.modules.length > 0 ? adr.modules.join(", ") : "—"}
                   </td>

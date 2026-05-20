@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useTransition } from "react";
-import { genererBrouillon, creerADR, type ADR } from "@/lib/api";
+import { useState, useTransition, useEffect } from "react";
+import { genererBrouillon, creerADR, listerProjets, type ADR, type ProjetInfo } from "@/lib/api";
 
 type Etape = "description" | "generation" | "edition" | "sauvegarde" | "done";
 
@@ -29,10 +29,19 @@ const BROUILLON_VIDE: ChampsBrouillon = {
 export default function PageNouveau() {
   const [etape, setEtape] = useState<Etape>("description");
   const [description, setDescription] = useState("");
+  const [projetChoisi, setProjetChoisi] = useState("");
   const [champs, setChamps] = useState<ChampsBrouillon>(BROUILLON_VIDE);
   const [erreur, setErreur] = useState<string | null>(null);
   const [adrCree, setAdrCree] = useState<ADR | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [projets, setProjets] = useState<ProjetInfo[]>([]);
+
+  useEffect(() => {
+    listerProjets().then((liste) => {
+      setProjets(liste);
+      if (liste.length === 1) setProjetChoisi(liste[0].id);
+    }).catch(() => {});
+  }, []);
 
   function setChamp(key: keyof ChampsBrouillon, value: string) {
     setChamps((prev) => ({ ...prev, [key]: value }));
@@ -44,7 +53,7 @@ export default function PageNouveau() {
     setEtape("generation");
     startTransition(async () => {
       try {
-        const draft = await genererBrouillon(description.trim());
+        const draft = await genererBrouillon(description.trim(), projetChoisi || undefined);
         setChamps({
           titre: draft.titre ?? "",
           statut: "propose",
@@ -68,11 +77,15 @@ export default function PageNouveau() {
   }
 
   function sauvegarder() {
+    if (!projetChoisi) {
+      setErreur("Sélectionne un projet avant de sauvegarder.");
+      return;
+    }
     setErreur(null);
     setEtape("sauvegarde");
     startTransition(async () => {
       try {
-        const adr = await creerADR({
+        const adr = await creerADR(projetChoisi, {
           titre: champs.titre || description.slice(0, 60),
           statut: champs.statut,
           modules: champs.modules.split(",").map((s) => s.trim()).filter(Boolean),
@@ -117,6 +130,22 @@ export default function PageNouveau() {
       {/* ── Étape 1 — Description ── */}
       {(etape === "description" || etape === "generation") && (
         <div className="bg-white rounded-xl border border-slate-200 p-6 space-y-4">
+          {projets.length > 1 && (
+            <div className="space-y-1.5">
+              <label className="block text-sm font-medium text-slate-700">Projet</label>
+              <select
+                value={projetChoisi}
+                onChange={(e) => setProjetChoisi(e.target.value)}
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value="">Sélectionner un projet…</option>
+                {projets.map((p) => (
+                  <option key={p.id} value={p.id}>{p.nom} ({p.nb_adrs} ADR)</option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <div className="space-y-2">
             <label className="block text-sm font-medium text-slate-700">
               Décris la décision à documenter
@@ -133,31 +162,34 @@ export default function PageNouveau() {
           <div className="flex gap-3">
             <button
               onClick={generer}
-              disabled={isPending || !description.trim()}
+              disabled={isPending || !description.trim() || (projets.length > 1 && !projetChoisi)}
               className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
             >
               {etape === "generation" ? "Génération en cours…" : "Générer le brouillon"}
             </button>
             <button
               onClick={creerManuellement}
-              disabled={isPending}
+              disabled={isPending || (projets.length > 1 && !projetChoisi)}
               className="px-4 py-2 bg-white text-slate-700 text-sm font-medium rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-50 transition-colors"
             >
               Créer manuellement
             </button>
           </div>
-
-          {etape === "generation" && (
-            <p className="text-sm text-slate-400">
-              Génération via Ollama en cours…
-            </p>
-          )}
         </div>
       )}
 
       {/* ── Étape 2 — Édition du brouillon ── */}
       {(etape === "edition" || etape === "sauvegarde") && (
         <div className="bg-white rounded-xl border border-slate-200 p-6 space-y-5">
+          {projetChoisi && (
+            <div className="flex items-center gap-2 text-sm text-slate-500">
+              Projet :
+              <span className="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded text-xs font-medium">
+                {projetChoisi}
+              </span>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2 space-y-1.5">
               <label className="block text-sm font-medium text-slate-700">Titre</label>
@@ -186,13 +218,13 @@ export default function PageNouveau() {
             <div className="space-y-1.5">
               <label className="block text-sm font-medium text-slate-700">
                 Modules
-                <span className="text-slate-400 font-normal ml-1">(séparés par virgule)</span>
+                <span className="text-slate-400 font-normal ml-1">(virgule)</span>
               </label>
               <input
                 type="text"
                 value={champs.modules}
                 onChange={(e) => setChamp("modules", e.target.value)}
-                placeholder="api, core, auth"
+                placeholder="api, core"
                 className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
             </div>
@@ -200,7 +232,7 @@ export default function PageNouveau() {
             <div className="col-span-2 space-y-1.5">
               <label className="block text-sm font-medium text-slate-700">
                 Décideurs
-                <span className="text-slate-400 font-normal ml-1">(séparés par virgule)</span>
+                <span className="text-slate-400 font-normal ml-1">(virgule)</span>
               </label>
               <input
                 type="text"
@@ -212,26 +244,11 @@ export default function PageNouveau() {
             </div>
           </div>
 
-          <Separateur />
+          <hr className="border-slate-100" />
 
-          <TextareaChamp
-            label="Contexte"
-            hint="Quel problème cherchait-on à résoudre ?"
-            value={champs.contexte}
-            onChange={(v) => setChamp("contexte", v)}
-          />
-          <TextareaChamp
-            label="Décision"
-            hint="Qu'a-t-on décidé ?"
-            value={champs.decision}
-            onChange={(v) => setChamp("decision", v)}
-          />
-          <TextareaChamp
-            label="Conséquences"
-            hint="Quels sont les impacts, compromis, risques ?"
-            value={champs.consequences}
-            onChange={(v) => setChamp("consequences", v)}
-          />
+          <TextareaChamp label="Contexte" hint="Quel problème ?" value={champs.contexte} onChange={(v) => setChamp("contexte", v)} />
+          <TextareaChamp label="Décision" hint="Qu'a-t-on décidé ?" value={champs.decision} onChange={(v) => setChamp("decision", v)} />
+          <TextareaChamp label="Conséquences" hint="Impacts, compromis, risques" value={champs.consequences} onChange={(v) => setChamp("consequences", v)} />
 
           <div className="flex gap-3 pt-2">
             <button
@@ -261,10 +278,13 @@ export default function PageNouveau() {
               ADR #{String(adrCree.id).padStart(3, "0")} sauvegardé
             </p>
             <p className="text-sm text-slate-500 mt-1">{adrCree.titre}</p>
+            <span className="inline-block mt-2 text-xs bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded font-medium">
+              {adrCree.projet}
+            </span>
           </div>
           <div className="flex gap-3 justify-center">
             <Link
-              href={`/adr/${adrCree.id}`}
+              href={`/adr/${adrCree.projet}/${adrCree.id}`}
               className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors"
             >
               Voir l&apos;ADR
@@ -282,15 +302,8 @@ export default function PageNouveau() {
   );
 }
 
-function Separateur() {
-  return <hr className="border-slate-100" />;
-}
-
 function TextareaChamp({
-  label,
-  hint,
-  value,
-  onChange,
+  label, hint, value, onChange,
 }: {
   label: string;
   hint: string;

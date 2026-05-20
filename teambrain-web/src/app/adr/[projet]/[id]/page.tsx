@@ -4,30 +4,34 @@ import { getADR } from "@/lib/api";
 import { StatutBadge } from "@/components/StatutBadge";
 
 interface PageProps {
-  params: Promise<{ id: string }>;
+  params: Promise<{ projet: string; id: string }>;
 }
 
 export default async function PageDetailADR({ params }: PageProps) {
-  const { id } = await params;
+  const { projet, id } = await params;
   const adrId = parseInt(id, 10);
 
   if (isNaN(adrId)) notFound();
 
   let adr;
   try {
-    adr = await getADR(adrId);
+    adr = await getADR(projet, adrId);
   } catch {
     notFound();
   }
 
   return (
     <div className="max-w-3xl space-y-8">
-      <div>
-        <Link
-          href="/"
-          className="text-sm text-slate-500 hover:text-slate-700 transition-colors"
-        >
+      <div className="flex items-center gap-3">
+        <Link href="/" className="text-sm text-slate-500 hover:text-slate-700 transition-colors">
           ← Toutes les décisions
+        </Link>
+        <span className="text-slate-300">·</span>
+        <Link
+          href={`/?projet=${projet}`}
+          className="text-xs bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded font-medium hover:bg-indigo-100 transition-colors"
+        >
+          {projet}
         </Link>
       </div>
 

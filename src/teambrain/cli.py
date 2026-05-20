@@ -230,9 +230,15 @@ def serve(
     http: bool = typer.Option(False, "--http", help="Lancer l'API HTTP REST (port 8003) au lieu du MCP stdio"),
     port: int = typer.Option(8003, "--port", help="Port du serveur HTTP (avec --http)"),
     host: str = typer.Option("0.0.0.0", "--host", help="Interface d'écoute (avec --http)"),
-    repo: str = typer.Option("", "--repo", help="Chemin vers le repo git (défaut : CWD)"),
+    repo: list[str] = typer.Option([], "--repo", help="Chemin(s) vers repo(s) git (répétable)"),
+    base: str = typer.Option("", "--base", help="Dossier parent — détecte tous les .decisions/ (profondeur 2)"),
 ):
-    """Lance le serveur MCP (stdio) ou l'API HTTP REST (--http)."""
+    """Lance le serveur MCP (stdio) ou l'API HTTP REST (--http).
+
+    Exemples multi-projets :
+      teambrain serve --http --repo /path/sand --repo /path/teambrain
+      teambrain serve --http --base /path/to/projets/
+    """
     if not http:
         from .server import mcp_app
         mcp_app.run(transport="stdio")
@@ -246,20 +252,40 @@ def serve(
 
     from .http_api import create_app
 
-    if repo:
-        repo_path = Path(repo).resolve()
-        decisions_dir_candidate = repo_path / ".decisions"
-        if not decisions_dir_candidate.is_dir():
-            err.print(f"[red]Pas de .decisions/ dans {repo_path}[/red]")
+    projets: dict[str, Path] = {}
+
+    if base:
+        base_path = Path(base).resolve()
+        candidates = sorted(
+            list(base_path.glob("*/.decisions")) + list(base_path.glob("*/*/.decisions"))
+        )
+        for d in candidates:
+            if d.is_dir() and (d / ".teambrain.json").exists():
+                nom = d.parent.name
+                projets[nom] = d
+        if not projets:
+            err.print(f"[red]Aucun .decisions/ trouvé sous {base_path}[/red]")
             raise typer.Exit(1)
-        decisions_dir = decisions_dir_candidate
+
+    elif repo:
+        for r in repo:
+            p = Path(r).resolve()
+            d = p / ".decisions" if p.name != ".decisions" else p
+            if not d.is_dir():
+                err.print(f"[red]Pas de .decisions/ dans {p}[/red]")
+                raise typer.Exit(1)
+            nom = d.parent.name
+            projets[nom] = d
+
     else:
-        decisions_dir = _require_dir()
+        d = _require_dir()
+        projets[d.parent.name] = d
 
     console.print(f"[green]▶[/green] TeamBrain API — http://{host}:{port}")
-    console.print(f"[dim].decisions/ : {decisions_dir}[/dim]")
+    for nom, d in projets.items():
+        console.print(f"[dim]  {nom} → {d}[/dim]")
     console.print(f"[dim]Docs : http://localhost:{port}/docs[/dim]")
-    uvicorn.run(create_app(decisions_dir), host=host, port=port)
+    uvicorn.run(create_app(projets), host=host, port=port)
 
 
 @app.command()
