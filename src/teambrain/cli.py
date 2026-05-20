@@ -226,10 +226,40 @@ def index():
 
 
 @app.command()
-def serve():
-    """Lance le serveur MCP (stdio) pour Claude Code / Cursor."""
-    from .server import mcp_app
-    mcp_app.run(transport="stdio")
+def serve(
+    http: bool = typer.Option(False, "--http", help="Lancer l'API HTTP REST (port 8003) au lieu du MCP stdio"),
+    port: int = typer.Option(8003, "--port", help="Port du serveur HTTP (avec --http)"),
+    host: str = typer.Option("0.0.0.0", "--host", help="Interface d'écoute (avec --http)"),
+    repo: str = typer.Option("", "--repo", help="Chemin vers le repo git (défaut : CWD)"),
+):
+    """Lance le serveur MCP (stdio) ou l'API HTTP REST (--http)."""
+    if not http:
+        from .server import mcp_app
+        mcp_app.run(transport="stdio")
+        return
+
+    try:
+        import uvicorn
+    except ImportError:
+        err.print("[red]uvicorn non installé.[/red] Lance : pip install -e '.[http]'")
+        raise typer.Exit(1)
+
+    from .http_api import create_app
+
+    if repo:
+        repo_path = Path(repo).resolve()
+        decisions_dir_candidate = repo_path / ".decisions"
+        if not decisions_dir_candidate.is_dir():
+            err.print(f"[red]Pas de .decisions/ dans {repo_path}[/red]")
+            raise typer.Exit(1)
+        decisions_dir = decisions_dir_candidate
+    else:
+        decisions_dir = _require_dir()
+
+    console.print(f"[green]▶[/green] TeamBrain API — http://{host}:{port}")
+    console.print(f"[dim].decisions/ : {decisions_dir}[/dim]")
+    console.print(f"[dim]Docs : http://localhost:{port}/docs[/dim]")
+    uvicorn.run(create_app(decisions_dir), host=host, port=port)
 
 
 @app.command()

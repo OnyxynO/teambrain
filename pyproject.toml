@@ -19,7 +19,8 @@ dependencies = [
 slack = ["slack-sdk~=3.30"]
 github = ["PyGithub~=2.0"]
 bot = ["slack-sdk~=3.30", "PyGithub~=2.0"]
-dev = ["pytest~=8.0", "pytest-cov"]
+http = ["fastapi[standard]~=0.115"]
+dev = ["pytest~=8.0", "pytest-cov", "httpx~=0.27"]
 
 [project.scripts]
 teambrain = "teambrain.cli:app"
