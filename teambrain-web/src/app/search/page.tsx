@@ -123,7 +123,7 @@ export default function PageRecherche() {
                     #{String(adr.id).padStart(3, "0")}
                   </span>
                   <Link
-                    href={`/adr/${adr.projet}/${adr.id}`}
+                    href={`/adr/?projet=${adr.projet}&id=${adr.id}`}
                     className="font-medium text-slate-900 hover:text-indigo-600 transition-colors truncate"
                   >
                     {adr.titre}

@@ -292,7 +292,7 @@ export default function PageNouveau() {
           </div>
           <div className="flex gap-3 justify-center">
             <Link
-              href={`/adr/${adrCree.projet}/${adrCree.id}`}
+              href={`/adr/?projet=${adrCree.projet}&id=${adrCree.id}`}
               className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors"
             >
               Voir l&apos;ADR

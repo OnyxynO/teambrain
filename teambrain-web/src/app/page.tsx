@@ -1,20 +1,33 @@
+"use client";
+
+import { useEffect, useState, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Suspense } from "react";
-import { listerADR, getReferentiels } from "@/lib/api";
+import { listerADR, getReferentiels, type ADR, type Referentiels } from "@/lib/api";
 import { StatutBadge } from "@/components/StatutBadge";
 import { FiltresADR } from "@/components/FiltresADR";
 
-interface PageProps {
-  searchParams: Promise<{ projet?: string; statut?: string; module?: string }>;
-}
+function ListeADR() {
+  const params = useSearchParams();
+  const projet = params.get("projet") ?? undefined;
+  const statut = params.get("statut") ?? undefined;
+  const module = params.get("module") ?? undefined;
 
-export default async function PageListe({ searchParams }: PageProps) {
-  const { projet, statut, module } = await searchParams;
+  const [adrs, setAdrs] = useState<ADR[]>([]);
+  const [refs, setRefs] = useState<Referentiels>({ modules: [], statuts: [], projets: [] });
+  const [chargement, setChargement] = useState(true);
 
-  const [adrs, refs] = await Promise.all([
-    listerADR({ projet, statut, module }).catch(() => []),
-    getReferentiels().catch(() => ({ modules: [], statuts: [], projets: [] })),
-  ]);
+  useEffect(() => {
+    setChargement(true);
+    Promise.all([
+      listerADR({ projet, statut, module }).catch(() => []),
+      getReferentiels().catch(() => ({ modules: [], statuts: [], projets: [] })),
+    ]).then(([a, r]) => {
+      setAdrs(a);
+      setRefs(r);
+      setChargement(false);
+    });
+  }, [projet, statut, module]);
 
   const multiProjets = refs.projets.length > 1;
 
@@ -23,25 +36,27 @@ export default async function PageListe({ searchParams }: PageProps) {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold">Décisions d&apos;architecture</h1>
-          <p className="text-sm text-slate-500 mt-1">{adrs.length} ADR</p>
+          <p className="text-sm text-slate-500 mt-1">
+            {chargement ? "…" : `${adrs.length} ADR`}
+          </p>
         </div>
         <Link
-          href="/nouveau"
+          href="/nouveau/"
           className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors"
         >
           + Nouvelle décision
         </Link>
       </div>
 
-      <Suspense>
-        <FiltresADR
-          statuts={refs.statuts}
-          modules={refs.modules}
-          projets={refs.projets}
-        />
-      </Suspense>
+      <FiltresADR
+        statuts={refs.statuts}
+        modules={refs.modules}
+        projets={refs.projets}
+      />
 
-      {adrs.length === 0 ? (
+      {chargement ? (
+        <div className="text-center py-16 text-slate-400">Chargement…</div>
+      ) : adrs.length === 0 ? (
         <div className="text-center py-16 text-slate-400">
           <p className="text-lg">Aucun ADR trouvé</p>
           {(projet || statut || module) && (
@@ -78,7 +93,7 @@ export default async function PageListe({ searchParams }: PageProps) {
                   </td>
                   <td className="px-4 py-3">
                     <Link
-                      href={`/adr/${adr.projet}/${adr.id}`}
+                      href={`/adr/?projet=${adr.projet}&id=${adr.id}`}
                       className="font-medium text-slate-900 hover:text-indigo-600 transition-colors"
                     >
                       {adr.titre}
@@ -105,5 +120,13 @@ export default async function PageListe({ searchParams }: PageProps) {
         </div>
       )}
     </div>
+  );
+}
+
+export default function PageListe() {
+  return (
+    <Suspense>
+      <ListeADR />
+    </Suspense>
   );
 }

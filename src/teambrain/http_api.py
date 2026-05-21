@@ -67,10 +67,10 @@ def _to_reponse(adr: ADR, projet: str) -> ADRReponse:
 
 # ── Usine d'application ────────────────────────────────────────────────────────
 
-def create_app(projets: dict[str, Path]) -> FastAPI:
+def create_app(projets: dict[str, Path], static_dir: Path | None = None) -> FastAPI:
     """
-    projets : dict nom_projet → chemin .decisions/
-    Exemple : {"sand": Path("/path/sand/.decisions"), "teambrain": Path(...)}
+    projets    : dict nom_projet → chemin .decisions/
+    static_dir : dossier du build Next.js (out/) — active le serving de l'UI
     """
     configs = {nom: load_config(d) for nom, d in projets.items()}
 
@@ -263,5 +263,23 @@ def create_app(projets: dict[str, Path]) -> FastAPI:
         if ancien_path and ancien_path != nouveau_path and ancien_path.exists():
             ancien_path.unlink()
         return _to_reponse(adr, projet)
+
+    if static_dir and static_dir.exists():
+        from fastapi.responses import FileResponse
+
+        @app.api_route("/", methods=["GET", "HEAD"], include_in_schema=False)
+        async def serve_root():
+            return FileResponse(static_dir / "index.html")
+
+        @app.api_route("/{path:path}", methods=["GET", "HEAD"], include_in_schema=False)
+        async def serve_static(path: str):
+            clean = path.rstrip("/")
+            f = static_dir / clean
+            if f.is_file():
+                return FileResponse(f)
+            idx = static_dir / clean / "index.html"
+            if idx.is_file():
+                return FileResponse(idx)
+            return FileResponse(static_dir / "index.html")
 
     return app

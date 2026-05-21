@@ -27,6 +27,9 @@ teambrain = "teambrain.cli:app"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/teambrain"]
+artifacts = [
+  "src/teambrain/static/**",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

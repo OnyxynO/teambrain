@@ -8,3 +8,8 @@ dist/
 .coverage
 
 .env.teambrain
+
+# Build frontend (généré par scripts/build_frontend.sh)
+src/teambrain/static/
+teambrain-web/out/
+teambrain-web/.next/

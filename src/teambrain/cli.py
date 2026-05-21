@@ -225,6 +225,33 @@ def index():
         console.print(f"[green]✓[/green] {n} ADR indexés.")
 
 
+def _resoudre_projets(repo: list[str], base: str) -> dict[str, Path]:
+    projets: dict[str, Path] = {}
+    if base:
+        base_path = Path(base).resolve()
+        candidates = sorted(
+            list(base_path.glob("*/.decisions")) + list(base_path.glob("*/*/.decisions"))
+        )
+        for d in candidates:
+            if d.is_dir() and (d / ".teambrain.json").exists():
+                projets[d.parent.name] = d
+        if not projets:
+            err.print(f"[red]Aucun .decisions/ trouvé sous {base_path}[/red]")
+            raise typer.Exit(1)
+    elif repo:
+        for r in repo:
+            p = Path(r).resolve()
+            d = p / ".decisions" if p.name != ".decisions" else p
+            if not d.is_dir():
+                err.print(f"[red]Pas de .decisions/ dans {p}[/red]")
+                raise typer.Exit(1)
+            projets[d.parent.name] = d
+    else:
+        d = _require_dir()
+        projets[d.parent.name] = d
+    return projets
+
+
 @app.command()
 def serve(
     http: bool = typer.Option(False, "--http", help="Lancer l'API HTTP REST (port 8003) au lieu du MCP stdio"),
@@ -252,40 +279,59 @@ def serve(
 
     from .http_api import create_app
 
-    projets: dict[str, Path] = {}
-
-    if base:
-        base_path = Path(base).resolve()
-        candidates = sorted(
-            list(base_path.glob("*/.decisions")) + list(base_path.glob("*/*/.decisions"))
-        )
-        for d in candidates:
-            if d.is_dir() and (d / ".teambrain.json").exists():
-                nom = d.parent.name
-                projets[nom] = d
-        if not projets:
-            err.print(f"[red]Aucun .decisions/ trouvé sous {base_path}[/red]")
-            raise typer.Exit(1)
-
-    elif repo:
-        for r in repo:
-            p = Path(r).resolve()
-            d = p / ".decisions" if p.name != ".decisions" else p
-            if not d.is_dir():
-                err.print(f"[red]Pas de .decisions/ dans {p}[/red]")
-                raise typer.Exit(1)
-            nom = d.parent.name
-            projets[nom] = d
-
-    else:
-        d = _require_dir()
-        projets[d.parent.name] = d
-
+    projets = _resoudre_projets(repo, base)
     console.print(f"[green]▶[/green] TeamBrain API — http://{host}:{port}")
     for nom, d in projets.items():
         console.print(f"[dim]  {nom} → {d}[/dim]")
     console.print(f"[dim]Docs : http://localhost:{port}/docs[/dim]")
     uvicorn.run(create_app(projets), host=host, port=port)
+
+
+@app.command()
+def ui(
+    repo: list[str] = typer.Option([], "--repo", help="Chemin(s) vers repo(s) git (répétable)"),
+    base: str = typer.Option("", "--base", help="Dossier parent — détecte tous les .decisions/"),
+    port: int = typer.Option(8003, "--port", help="Port du serveur"),
+    host: str = typer.Option("127.0.0.1", "--host", help="Interface d'écoute"),
+):
+    """Lance l'interface web TeamBrain (API + frontend intégré).
+
+    Exemple :
+      teambrain ui
+      teambrain ui --repo /path/sand --repo /path/teambrain
+      teambrain ui --base /path/to/projets/
+    """
+    static_dir = Path(__file__).parent / "static"
+    if not static_dir.exists():
+        err.print(
+            "[red]Frontend non bundlé.[/red] Lance d'abord :\n"
+            "  [dim]scripts/build_frontend.sh[/dim]"
+        )
+        raise typer.Exit(1)
+
+    try:
+        import uvicorn
+    except ImportError:
+        err.print("[red]uvicorn non installé.[/red] Lance : pip install -e '.[http]'")
+        raise typer.Exit(1)
+
+    import threading
+    import webbrowser
+
+    from .http_api import create_app
+
+    projets = _resoudre_projets(repo, base)
+    console.print(f"[green]▶[/green] TeamBrain — [cyan]http://localhost:{port}[/cyan]")
+    for nom, d in projets.items():
+        console.print(f"[dim]  {nom} → {d}[/dim]")
+
+    def _open():
+        import time
+        time.sleep(1.2)
+        webbrowser.open(f"http://localhost:{port}")
+
+    threading.Thread(target=_open, daemon=True).start()
+    uvicorn.run(create_app(projets, static_dir=static_dir), host=host, port=port)
 
 
 @app.command()

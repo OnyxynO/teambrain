@@ -1,23 +1,51 @@
+"use client";
+
+import { useEffect, useState, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { notFound } from "next/navigation";
-import { getADR } from "@/lib/api";
+import { getADR, type ADR } from "@/lib/api";
 import { StatutBadge } from "@/components/StatutBadge";
 
-interface PageProps {
-  params: Promise<{ projet: string; id: string }>;
-}
+function DetailADR() {
+  const params = useSearchParams();
+  const projet = params.get("projet") ?? "";
+  const id = parseInt(params.get("id") ?? "", 10);
 
-export default async function PageDetailADR({ params }: PageProps) {
-  const { projet, id } = await params;
-  const adrId = parseInt(id, 10);
+  const [adr, setAdr] = useState<ADR | null>(null);
+  const [erreur, setErreur] = useState<string | null>(null);
+  const [chargement, setChargement] = useState(true);
 
-  if (isNaN(adrId)) notFound();
+  useEffect(() => {
+    if (!projet || isNaN(id)) {
+      setErreur("Paramètres invalides");
+      setChargement(false);
+      return;
+    }
+    setChargement(true);
+    getADR(projet, id)
+      .then((a) => {
+        setAdr(a);
+        setChargement(false);
+      })
+      .catch(() => {
+        setErreur("ADR introuvable");
+        setChargement(false);
+      });
+  }, [projet, id]);
 
-  let adr;
-  try {
-    adr = await getADR(projet, adrId);
-  } catch {
-    notFound();
+  if (chargement) {
+    return <div className="text-center py-16 text-slate-400">Chargement…</div>;
+  }
+
+  if (erreur || !adr) {
+    return (
+      <div className="text-center py-16 text-slate-400">
+        <p>{erreur ?? "ADR introuvable"}</p>
+        <Link href="/" className="text-indigo-600 hover:underline text-sm mt-2 block">
+          ← Retour à la liste
+        </Link>
+      </div>
+    );
   }
 
   return (
@@ -128,5 +156,13 @@ function SectionConsequences({ contenu }: { contenu: string }) {
         )}
       </div>
     </div>
+  );
+}
+
+export default function PageDetailADR() {
+  return (
+    <Suspense>
+      <DetailADR />
+    </Suspense>
   );
 }
