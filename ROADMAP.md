@@ -14,6 +14,8 @@
 | Module 4 — Git/Code Mining | ✅ livré | `scan-commits` + `scan-code` + scoring Ollama |
 | Module 5 — Scanner sémantique | ✅ livré | `--semantic` sur `scan-commits`, sqlite-vec cosine |
 | Audit sécurité/qualité | ✅ livré | 14 corrections (injection, permissions, threading) |
+| Module 6 — Interface web | ✅ livré | API REST FastAPI + frontend Next.js 16, multi-projets, /nouveau adaptatif Ollama |
+| **Publication v1.0** | 🔜 priorité | Packaging, distribution, README quick start — voir section dédiée |
 
 ---
 
@@ -91,6 +93,53 @@ Port cible : **8003** (après NormMatch 8002, SemanticMatch 8001).
 | Designer | Comprendre les contraintes techniques qui impactent l'UX |
 | Dev junior | Onboarding : lire les décisions passées en contexte |
 | AI agent (Claude/Cursor) | Consomme via MCP (inchangé) |
+
+---
+
+## Publication v1.0 — Packaging et distribution
+
+**Objectif :** rendre TeamBrain installable et utilisable par n'importe qui en quelques minutes, sur le modèle d'ICSMulti (release GitHub propre, documentation claire).
+
+### Question ouverte : architecture de distribution
+
+Deux options à trancher avant de coder :
+
+| Option | Avantages | Inconvénients |
+|---|---|---|
+| **A — Deux processus séparés** | Simple à implémenter, stack inchangée | L'utilisateur doit lancer API + frontend manuellement, DX médiocre |
+| **B — Frontend bundlé dans Python** | `teambrain ui` lance tout d'un coup, DX excellente | Build Next.js à embarquer dans le package, complexité CI/CD |
+
+**Recommandation :** Option B avec une commande `teambrain ui` qui :
+1. Lance l'API FastAPI (`--http`) en arrière-plan
+2. Sert le frontend Next.js **pré-buildé** (fichiers statiques via FastAPI `StaticFiles`)
+3. Ouvre le navigateur sur `http://localhost:8003`
+
+Le build Next.js (`bun run build` → `out/`) est inclus dans le package Python via `package_data`. L'utilisateur n'a pas besoin de Node.js installé.
+
+### Tâches
+
+#### Packaging
+- [ ] Décision finale Option A ou B
+- [ ] Si B : script de build `scripts/build_frontend.sh` + intégration dans `pyproject.toml` (`package_data`)
+- [ ] Commande `teambrain ui` dans `cli.py` (lance API + ouvre navigateur)
+- [ ] Tester `pip install teambrain` depuis zéro sur une machine propre
+
+#### Documentation
+- [ ] README refondu : quick start en 3 commandes (`pip install` → `teambrain init` → `teambrain ui`)
+- [ ] Section "Sans Ollama" (création manuelle, pas de brouillon IA)
+- [ ] Section "Multi-projets" (`--repo` répétable)
+- [ ] `EXAMPLE_CONFIG.md` mis à jour
+
+#### Release
+- [ ] Bump version → **v1.0.0** dans `pyproject.toml`
+- [ ] GitHub Release avec tag `v1.0.0` + changelog
+- [ ] Décision : publier sur PyPI ou GitHub Releases uniquement ?
+
+### Prérequis à valider avant release
+
+- Tests existants verts sur machine propre (sans `.decisions/` pré-existant)
+- `teambrain init` + `teambrain add` + `teambrain ui` : parcours complet fonctionnel
+- Frontend buildé testé dans le contexte servi par FastAPI (pas juste en dev Next.js)
 
 ---
 
