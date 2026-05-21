@@ -113,9 +113,16 @@ def create_app(projets: dict[str, Path]) -> FastAPI:
 
     @app.get("/health")
     def health():
+        try:
+            import ollama as _ollama
+            _ollama.list()
+            ollama_disponible = True
+        except Exception:
+            ollama_disponible = False
         return {
             "status": "ok",
             "projets": {nom: str(d) for nom, d in projets.items()},
+            "ollama_disponible": ollama_disponible,
         }
 
     # ── Projets ───────────────────────────────────────────────────────────────

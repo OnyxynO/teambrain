@@ -29,6 +29,11 @@ export interface ReponseRecherche {
   index_disponible: boolean | null;
 }
 
+export interface HealthReponse {
+  status: string;
+  ollama_disponible: boolean;
+}
+
 export interface Referentiels {
   modules: string[];
   statuts: string[];
@@ -85,6 +90,10 @@ export function rechercherADR(
   if (opts?.projet) qs.set("projet", opts.projet);
   if (opts?.semantic) qs.set("semantic", "true");
   return apiFetch(`/adr/search?${qs}`);
+}
+
+export function getHealth(): Promise<HealthReponse> {
+  return apiFetch("/health");
 }
 
 export function getReferentiels(projet?: string): Promise<Referentiels> {

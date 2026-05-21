@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState, useTransition, useEffect } from "react";
-import { genererBrouillon, creerADR, listerProjets, type ADR, type ProjetInfo } from "@/lib/api";
+import { genererBrouillon, creerADR, listerProjets, getHealth, type ADR, type ProjetInfo } from "@/lib/api";
 
 type Etape = "description" | "generation" | "edition" | "sauvegarde" | "done";
 
@@ -35,12 +35,18 @@ export default function PageNouveau() {
   const [adrCree, setAdrCree] = useState<ADR | null>(null);
   const [isPending, startTransition] = useTransition();
   const [projets, setProjets] = useState<ProjetInfo[]>([]);
+  const [ollamaDisponible, setOllamaDisponible] = useState<boolean | null>(null);
 
   useEffect(() => {
-    listerProjets().then((liste) => {
+    Promise.all([listerProjets(), getHealth()]).then(([liste, health]) => {
       setProjets(liste);
+      setOllamaDisponible(health.ollama_disponible);
       if (liste.length === 1) setProjetChoisi(liste[0].id);
-    }).catch(() => {});
+      if (!health.ollama_disponible) setEtape("edition");
+    }).catch(() => {
+      setOllamaDisponible(false);
+      setEtape("edition");
+    });
   }, []);
 
   function setChamp(key: keyof ChampsBrouillon, value: string) {
@@ -69,11 +75,6 @@ export default function PageNouveau() {
         setEtape("description");
       }
     });
-  }
-
-  function creerManuellement() {
-    setChamps({ ...BROUILLON_VIDE, decision: description.trim() });
-    setEtape("edition");
   }
 
   function sauvegarder() {
@@ -167,13 +168,6 @@ export default function PageNouveau() {
             >
               {etape === "generation" ? "Génération en cours…" : "Générer le brouillon"}
             </button>
-            <button
-              onClick={creerManuellement}
-              disabled={isPending || (projets.length > 1 && !projetChoisi)}
-              className="px-4 py-2 bg-white text-slate-700 text-sm font-medium rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-50 transition-colors"
-            >
-              Créer manuellement
-            </button>
           </div>
         </div>
       )}
@@ -181,14 +175,28 @@ export default function PageNouveau() {
       {/* ── Étape 2 — Édition du brouillon ── */}
       {(etape === "edition" || etape === "sauvegarde") && (
         <div className="bg-white rounded-xl border border-slate-200 p-6 space-y-5">
-          {projetChoisi && (
+          {ollamaDisponible === false ? (
+            <div className="space-y-1.5">
+              <label className="block text-sm font-medium text-slate-700">Projet</label>
+              <select
+                value={projetChoisi}
+                onChange={(e) => setProjetChoisi(e.target.value)}
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value="">Sélectionner un projet…</option>
+                {projets.map((p) => (
+                  <option key={p.id} value={p.id}>{p.nom} ({p.nb_adrs} ADR)</option>
+                ))}
+              </select>
+            </div>
+          ) : projetChoisi ? (
             <div className="flex items-center gap-2 text-sm text-slate-500">
               Projet :
               <span className="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded text-xs font-medium">
                 {projetChoisi}
               </span>
             </div>
-          )}
+          ) : null}
 
           <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2 space-y-1.5">
