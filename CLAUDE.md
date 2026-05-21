@@ -93,6 +93,7 @@ teambrain scan-code --no-ai                     # matchs bruts sans scoring Olla
 - **Audit sécurité/qualité** : ✅ 14 corrections (2026-05-14) — injection format string, permissions tokens, race condition threading, etc.
 - **Améliorations Slack** : ✅ wizard manifest + check canaux réel + persistance proposals (2026-05-14)
 - **Module 6** : ✅ Interface web (2026-05-20) — API REST FastAPI (`teambrain serve --http`, port 8003) + frontend `teambrain-web/` (Next.js 16, port 3003). Routes : liste, détail, recherche, création guidée (brouillon Ollama). 25 tests API, 103 au total.
+- **Corrections UX (2026-05-21)** : template modules vide par défaut, langue forcée en français dans `ai.py`, affichage conséquences structurées (dict Python → listes +/−), `/nouveau` adaptatif selon `ollama_disponible`.
 
 ## Roadmap — prochaines évolutions
 
@@ -257,6 +258,12 @@ Exemple pour un repo style Conventional Commits français (ex: SAND) :
 }
 ```
 
+## API HTTP — Points clés (Module 6)
+
+- `GET /health` expose `ollama_disponible` (ping `ollama.list()` à chaque appel) — utilisé par le frontend `/nouveau` pour brancher sur le bon flux.
+- Le serveur Next.js (`teambrain-web/`) doit être redémarré si l'API n'était pas encore lancée au démarrage — Next.js cache les 404 serveur, même avec `revalidate: 0`.
+- Lancer l'API avec `--repo "nom:/chemin"` est invalide — utiliser `--repo "/chemin"` (le nom est déduit du dossier parent).
+
 ## Pièges connus
 
 **Modules 1-2** :
@@ -284,6 +291,13 @@ Exemple pour un repo style Conventional Commits français (ex: SAND) :
 - `qwen3:1.7b` est très conservateur sur des commits courts sans contexte narratif — sur SAND (Conventional Commits), il n'en retient que 2/34 avec seuil 0.7. Préférer `--no-ai` + sélection manuelle pour les repos à messages de commit courts.
 - Le template `_USER` dans `ai.py` utilise `["liste", "des", "modules", "concernés"]` comme exemple de modules. qwen3:1.7b le prend parfois au pied de la lettre → corriger manuellement les ADR générés concernés.
 - `scan-commits` / `scan-code` ne sont pas interactifs via le préfixe `!` de Claude Code (stdin non connecté). Lancer dans un vrai terminal ou piper des réponses (`printf 'i\n%.0s' {1..50} | teambrain scan-commits`) pour afficher la liste sans créer d'ADR.
+
+**Module 6 — Interface web** :
+- `ai.py` : qwen3:1.7b copie les valeurs d'exemple du template JSON (ex: `["liste", "des", "modules", "concernés"]`) → toujours mettre `[]` comme valeur par défaut pour les listes, jamais une liste d'exemple.
+- `ai.py` : qwen3:1.7b génère en anglais si le prompt système ne force pas explicitement la langue (`Rédige TOUJOURS en français`).
+- `ai.py` : les conséquences peuvent être retournées sous forme de dict Python stringifié `{'positives': [...], 'négatives': [...]}` — le frontend le détecte et le rend en listes structurées. Corriger via le prompt si ce format réapparaît.
+- Next.js server component + API locale : si le serveur Next.js démarre avant l'API FastAPI, les pages qui fetchent côté serveur retournent 404 et mettent en cache ce résultat. Toujours démarrer l'API *avant* le frontend, ou redémarrer Next.js après l'API.
+- `teambrain serve --http` : le flag `--repo` attend un chemin absolu seul (`--repo "/chemin"`), pas un alias `"nom:/chemin"`.
 
 **Module 5** :
 - Mode sémantique : `seuil_distance` est une distance cosine (0=identique, 1=orthogonal). Défaut : 0.3. L2 est désactivé dans `store.py` via `distance_metric=cosine` — sans cette déclaration explicite, sqlite-vec utilise L2 par défaut et les scores sont incorrects (Principe 18).
