@@ -4,6 +4,20 @@ import Link from "next/link";
 import { useState, useTransition, useEffect } from "react";
 import { genererBrouillon, creerADR, listerProjets, getHealth, type ADR, type ProjetInfo } from "@/lib/api";
 
+function consequencesVersTexte(c: unknown): string {
+  if (typeof c === "string") return c;
+  if (c && typeof c === "object") {
+    const obj = c as Record<string, unknown>;
+    const pos = (obj["positives"] as string[] | undefined) ?? [];
+    const neg = ((obj["negatives"] ?? obj["négatives"]) as string[] | undefined) ?? [];
+    const lignes: string[] = [];
+    if (pos.length) lignes.push("Positives :", ...pos.map((x) => `+ ${x}`));
+    if (neg.length) lignes.push("Négatives :", ...neg.map((x) => `- ${x}`));
+    return lignes.join("\n");
+  }
+  return String(c ?? "");
+}
+
 type Etape = "description" | "generation" | "edition" | "sauvegarde" | "done";
 
 interface ChampsBrouillon {
@@ -67,7 +81,7 @@ export default function PageNouveau() {
           decideurs: (draft.decideurs ?? []).join(", "),
           contexte: draft.contexte ?? "",
           decision: draft.decision ?? "",
-          consequences: draft.consequences ?? "",
+          consequences: consequencesVersTexte(draft.consequences),
         });
         setEtape("edition");
       } catch (err) {
