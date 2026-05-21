@@ -24,7 +24,8 @@ Roadmap : `ROADMAP.md`
 
 ```
 src/teambrain/
-├── cli.py         # 11 commandes : init, add, list, search, show, index, serve, setup, bot, scan-commits, scan-code
+├── cli.py         # 12 commandes : init, add, list, search, show, index, serve, ui, setup, bot, scan-commits, scan-code
+├── static/        # build Next.js (généré par scripts/build_frontend.sh — gitignored)
 ├── adr.py         # modèle ADR, lecture/écriture/search texte
 ├── ai.py          # génération brouillon via Ollama
 ├── store.py       # index sqlite-vec + embeddings Ollama
@@ -81,6 +82,12 @@ teambrain scan-commits --pattern "migrer"       # pattern supplémentaire (rép�
 teambrain scan-code                             # scanne les commentaires du code (marqueurs DECISION:, ADR:)
 teambrain scan-code --pattern "CHOIX_ARCHI:"   # pattern supplémentaire (répétable)
 teambrain scan-code --no-ai                     # matchs bruts sans scoring Ollama
+
+# Interface web bundlée (Option B)
+bash scripts/build_frontend.sh                 # build Next.js → src/teambrain/static/ (avant pip install)
+teambrain ui                                   # API + UI + ouverture navigateur (port 8003)
+teambrain ui --repo /path/sand --repo /path/tb # multi-projets
+teambrain ui --base /path/to/projets/          # auto-détection
 ```
 
 ## État des modules
@@ -94,6 +101,7 @@ teambrain scan-code --no-ai                     # matchs bruts sans scoring Olla
 - **Améliorations Slack** : ✅ wizard manifest + check canaux réel + persistance proposals (2026-05-14)
 - **Module 6** : ✅ Interface web (2026-05-20) — API REST FastAPI (`teambrain serve --http`, port 8003) + frontend `teambrain-web/` (Next.js 16, port 3003). Routes : liste, détail, recherche, création guidée (brouillon Ollama). 25 tests API, 103 au total.
 - **Corrections UX (2026-05-21)** : template modules vide par défaut, langue forcée en français dans `ai.py`, affichage conséquences structurées (dict Python → listes +/−), `/nouveau` adaptatif selon `ollama_disponible`.
+- **Option B packaging (2026-05-21)** : ✅ `teambrain ui` — frontend statique bundlé dans le package Python. 107 tests. Zéro Node.js requis à l'exécution.
 
 ## Roadmap — prochaines évolutions
 
@@ -295,9 +303,16 @@ Exemple pour un repo style Conventional Commits français (ex: SAND) :
 **Module 6 — Interface web** :
 - `ai.py` : qwen3:1.7b copie les valeurs d'exemple du template JSON (ex: `["liste", "des", "modules", "concernés"]`) → toujours mettre `[]` comme valeur par défaut pour les listes, jamais une liste d'exemple.
 - `ai.py` : qwen3:1.7b génère en anglais si le prompt système ne force pas explicitement la langue (`Rédige TOUJOURS en français`).
-- `ai.py` : les conséquences peuvent être retournées sous forme de dict Python stringifié `{'positives': [...], 'négatives': [...]}` — le frontend le détecte et le rend en listes structurées. Corriger via le prompt si ce format réapparaît.
+- `ai.py` : les conséquences peuvent être retournées sous forme de dict Python stringifié `{'positives': [...], 'négatives': [...]}` ou objet JSON — `consequencesVersTexte()` dans `nouveau/page.tsx` gère les deux cas (string ou objet).
 - Next.js server component + API locale : si le serveur Next.js démarre avant l'API FastAPI, les pages qui fetchent côté serveur retournent 404 et mettent en cache ce résultat. Toujours démarrer l'API *avant* le frontend, ou redémarrer Next.js après l'API.
 - `teambrain serve --http` : le flag `--repo` attend un chemin absolu seul (`--repo "/chemin"`), pas un alias `"nom:/chemin"`.
+
+**Option B — packaging** :
+- `scripts/build_frontend.sh` doit être lancé avant `pip install -e .` (ou `hatch build`) — `src/teambrain/static/` est gitignored mais embarqué dans le wheel via `artifacts` hatchling.
+- Route dynamique Next.js `/adr/[projet]/[id]` incompatible avec `output: 'export'` → convertie en `/adr/?projet=X&id=Y` (query params, page statique client).
+- Routes FastAPI catch-all `@app.api_route("/{path:path}", methods=["GET", "HEAD"])` ajoutées **après** toutes les routes API → les routes explicites ont la priorité.
+- `redirect_slashes` doit rester à `True` (défaut FastAPI) — les pages statiques sont servies via les routes catch-all, pas via un mount Starlette.
+- `request: Request` dans les routes catch-all cause un 422 — ne pas l'inclure dans la signature si inutilisé.
 
 **Module 5** :
 - Mode sémantique : `seuil_distance` est une distance cosine (0=identique, 1=orthogonal). Défaut : 0.3. L2 est désactivé dans `store.py` via `distance_metric=cosine` — sans cette déclaration explicite, sqlite-vec utilise L2 par défaut et les scores sont incorrects (Principe 18).
