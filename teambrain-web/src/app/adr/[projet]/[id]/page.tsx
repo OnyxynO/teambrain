@@ -57,7 +57,7 @@ export default async function PageDetailADR({ params }: PageProps) {
       <div className="space-y-6">
         <Section titre="Contexte" contenu={adr.contexte} />
         <Section titre="Décision" contenu={adr.decision} />
-        <Section titre="Conséquences" contenu={adr.consequences} />
+        <SectionConsequences contenu={adr.consequences} />
       </div>
     </div>
   );
@@ -70,6 +70,62 @@ function Section({ titre, contenu }: { titre: string; contenu: string }) {
       <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">{titre}</h2>
       <div className="bg-white rounded-xl border border-slate-200 p-5">
         <p className="text-slate-700 leading-relaxed whitespace-pre-wrap">{contenu}</p>
+      </div>
+    </div>
+  );
+}
+
+function parseConsequencesPythonDict(texte: string): { positives: string[]; negatives: string[] } | null {
+  const posMatch = texte.match(/'positives':\s*\[([^\]]*)\]/);
+  const negMatch = texte.match(/'n[eé]gatives':\s*\[([^\]]*)\]/);
+  if (!posMatch && !negMatch) return null;
+  const parseItems = (raw: string) =>
+    raw.split(/,\s*(?=')/).map((s) => s.trim().replace(/^'|'$/g, "")).filter(Boolean);
+  return {
+    positives: posMatch ? parseItems(posMatch[1]) : [],
+    negatives: negMatch ? parseItems(negMatch[1]) : [],
+  };
+}
+
+function SectionConsequences({ contenu }: { contenu: string }) {
+  if (!contenu) return null;
+  const parsed = parseConsequencesPythonDict(contenu);
+  return (
+    <div className="space-y-2">
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">Conséquences</h2>
+      <div className="bg-white rounded-xl border border-slate-200 p-5">
+        {parsed ? (
+          <div className="space-y-4">
+            {parsed.positives.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-emerald-600 uppercase tracking-wide mb-2">Positives</p>
+                <ul className="space-y-1.5">
+                  {parsed.positives.map((item, i) => (
+                    <li key={i} className="flex gap-2 text-slate-700 leading-snug">
+                      <span className="text-emerald-500 font-bold shrink-0">+</span>
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {parsed.negatives.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-red-500 uppercase tracking-wide mb-2">Négatives</p>
+                <ul className="space-y-1.5">
+                  {parsed.negatives.map((item, i) => (
+                    <li key={i} className="flex gap-2 text-slate-700 leading-snug">
+                      <span className="text-red-400 font-bold shrink-0">−</span>
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        ) : (
+          <p className="text-slate-700 leading-relaxed whitespace-pre-wrap">{contenu}</p>
+        )}
       </div>
     </div>
   );

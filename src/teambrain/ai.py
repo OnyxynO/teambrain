@@ -5,19 +5,22 @@ import ollama
 
 _SYSTEM = """Tu es un expert en Architecture Decision Records (ADR).
 Génère un brouillon d'ADR en JSON à partir d'une description.
-Réponds uniquement avec un objet JSON valide, sans markdown ni explication."""
+Réponds UNIQUEMENT avec un objet JSON valide, sans markdown ni explication.
+Rédige TOUJOURS en français, quelle que soit la langue de la description."""
 
 _USER_SUFFIX = """
 
 Génère un ADR avec exactement ces champs JSON :
 {
   "titre": "titre court et descriptif de la décision",
-  "modules": ["liste", "des", "modules", "concernés"],
+  "modules": [],
   "decideurs": [],
   "contexte": "contexte et contraintes qui ont mené à cette décision",
   "decision": "la décision prise et pourquoi",
   "consequences": "conséquences positives et négatives"
-}"""
+}
+
+Le champ "modules" doit contenir les noms des composants ou couches techniques concernés (ex: ["auth", "api"]), ou rester vide si inconnu."""
 
 
 def generate_draft(description: str, model: str) -> dict:
