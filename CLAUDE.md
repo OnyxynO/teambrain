@@ -102,6 +102,9 @@ teambrain ui --base /path/to/projets/          # auto-détection
 - **Module 6** : ✅ Interface web (2026-05-20) — API REST FastAPI (`teambrain serve --http`, port 8003) + frontend `teambrain-web/` (Next.js 16, port 3003). Routes : liste, détail, recherche, création guidée (brouillon Ollama). 25 tests API, 103 au total.
 - **Corrections UX (2026-05-21)** : template modules vide par défaut, langue forcée en français dans `ai.py`, affichage conséquences structurées (dict Python → listes +/−), `/nouveau` adaptatif selon `ollama_disponible`.
 - **Option B packaging (2026-05-21)** : ✅ `teambrain ui` — frontend statique bundlé dans le package Python. 107 tests. Zéro Node.js requis à l'exécution.
+- **Audit sécurité (2026-05-22)** : ✅ 7 corrections — path traversal serve_static, starlette 1.0.1, host 127.0.0.1, /health info disclosure, max_length draft, écriture atomique MCP setup, pytest 9.0.3.
+- **README v1.0 + version bump (2026-05-22)** : ✅ README complet, version 1.0.0 dans pyproject.toml.
+- **Décision UI (2026-05-22)** : `teambrain ui` passera de `webbrowser.open()` → **PyWebView** (fenêtre native WebKit). Séquence : (1) modifs UI sur le frontend Next.js d'abord, (2) intégration PyWebView. Publication v1.0.0 après.
 
 ## Roadmap — prochaines évolutions
 
