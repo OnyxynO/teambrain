@@ -256,7 +256,7 @@ def _resoudre_projets(repo: list[str], base: str) -> dict[str, Path]:
 def serve(
     http: bool = typer.Option(False, "--http", help="Lancer l'API HTTP REST (port 8003) au lieu du MCP stdio"),
     port: int = typer.Option(8003, "--port", help="Port du serveur HTTP (avec --http)"),
-    host: str = typer.Option("0.0.0.0", "--host", help="Interface d'écoute (avec --http)"),
+    host: str = typer.Option("127.0.0.1", "--host", help="Interface d'écoute (avec --http). Utilise 0.0.0.0 pour exposer sur le réseau."),
     repo: list[str] = typer.Option([], "--repo", help="Chemin(s) vers repo(s) git (répétable)"),
     base: str = typer.Option("", "--base", help="Dossier parent — détecte tous les .decisions/ (profondeur 2)"),
 ):
@@ -351,6 +351,27 @@ def setup(
         raise typer.Exit(1)
 
 
+def _atomic_write_json(path: Path, data: dict) -> None:
+    """Écrit du JSON atomiquement via un fichier temporaire pour éviter la corruption."""
+    import json
+    import os
+    import tempfile
+    content = json.dumps(data, indent=2, ensure_ascii=False)
+    fd, tmp_str = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
+    tmp = Path(tmp_str)
+    try:
+        os.write(fd, content.encode("utf-8"))
+        os.close(fd)
+        tmp.replace(path)
+    except Exception:
+        try:
+            os.close(fd)
+        except OSError:
+            pass
+        tmp.unlink(missing_ok=True)
+        raise
+
+
 def _setup_mcp() -> None:
     """Configure le serveur MCP dans Claude Code et Cursor (si détectés)."""
     import json
@@ -363,7 +384,7 @@ def _setup_mcp() -> None:
     if claude_cfg.exists():
         data = json.loads(claude_cfg.read_text(encoding="utf-8"))
         data.setdefault("mcpServers", {})["teambrain"] = entry
-        claude_cfg.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+        _atomic_write_json(claude_cfg, data)
         configured.append("Claude Code (~/.claude.json)")
 
     # Cursor — ~/.cursor/mcp.json
@@ -371,7 +392,7 @@ def _setup_mcp() -> None:
     if cursor_cfg.parent.exists():
         data = json.loads(cursor_cfg.read_text(encoding="utf-8")) if cursor_cfg.exists() else {}
         data.setdefault("mcpServers", {})["teambrain"] = entry
-        cursor_cfg.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+        _atomic_write_json(cursor_cfg, data)
         configured.append("Cursor (~/.cursor/mcp.json)")
 
     if configured:

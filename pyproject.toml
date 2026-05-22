@@ -20,7 +20,7 @@ slack = ["slack-sdk~=3.30"]
 github = ["PyGithub~=2.0"]
 bot = ["slack-sdk~=3.30", "PyGithub~=2.0"]
 http = ["fastapi[standard]~=0.115"]
-dev = ["pytest~=8.0", "pytest-cov", "httpx~=0.27"]
+dev = ["pytest>=9.0.3", "pytest-cov", "httpx~=0.27"]
 
 [project.scripts]
 teambrain = "teambrain.cli:app"
@@ -33,3 +33,9 @@ artifacts = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[dependency-groups]
+dev = [
+    "pip-audit>=2.10.0",
+    "pytest>=9.0.3",
+]

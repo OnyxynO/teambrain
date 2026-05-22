@@ -6,7 +6,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .adr import ADR, list_adrs, next_id, save_adr, search_adrs
 from .ai import generate_draft
@@ -40,7 +40,7 @@ class ADRPayload(BaseModel):
 
 
 class BrouillonRequete(BaseModel):
-    description: str
+    description: str = Field(..., max_length=2000)
     projet: str | None = None
 
 
@@ -121,7 +121,7 @@ def create_app(projets: dict[str, Path], static_dir: Path | None = None) -> Fast
             ollama_disponible = False
         return {
             "status": "ok",
-            "projets": {nom: str(d) for nom, d in projets.items()},
+            "projets": list(projets.keys()),
             "ollama_disponible": ollama_disponible,
         }
 
@@ -273,11 +273,15 @@ def create_app(projets: dict[str, Path], static_dir: Path | None = None) -> Fast
 
         @app.api_route("/{path:path}", methods=["GET", "HEAD"], include_in_schema=False)
         async def serve_static(path: str):
-            clean = path.rstrip("/")
-            f = static_dir / clean
+            static_root = static_dir.resolve()
+            try:
+                f = (static_dir / path.rstrip("/")).resolve()
+                f.relative_to(static_root)
+            except (ValueError, OSError):
+                return FileResponse(static_dir / "index.html")
             if f.is_file():
                 return FileResponse(f)
-            idx = static_dir / clean / "index.html"
+            idx = f / "index.html"
             if idx.is_file():
                 return FileResponse(idx)
             return FileResponse(static_dir / "index.html")
