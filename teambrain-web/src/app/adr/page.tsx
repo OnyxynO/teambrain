@@ -242,8 +242,9 @@ function DetailADR() {
 
           <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2 space-y-1.5">
-              <label className="block text-sm font-medium text-slate-700">Titre</label>
+              <label htmlFor="edit-titre" className="block text-sm font-medium text-slate-700">Titre</label>
               <input
+                id="edit-titre"
                 type="text"
                 value={champs.titre}
                 onChange={(e) => setChamp("titre", e.target.value)}
@@ -252,8 +253,9 @@ function DetailADR() {
             </div>
 
             <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-slate-700">Statut</label>
+              <label htmlFor="edit-statut" className="block text-sm font-medium text-slate-700">Statut</label>
               <select
+                id="edit-statut"
                 value={champs.statut}
                 onChange={(e) => setChamp("statut", e.target.value)}
                 className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
@@ -266,8 +268,9 @@ function DetailADR() {
             </div>
 
             <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-slate-700">Date</label>
+              <label htmlFor="edit-date" className="block text-sm font-medium text-slate-700">Date</label>
               <input
+                id="edit-date"
                 type="date"
                 value={champs.date}
                 onChange={(e) => setChamp("date", e.target.value)}
@@ -276,11 +279,12 @@ function DetailADR() {
             </div>
 
             <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-slate-700">
+              <label htmlFor="edit-modules" className="block text-sm font-medium text-slate-700">
                 Modules
                 <span className="text-slate-400 font-normal ml-1">(virgule)</span>
               </label>
               <input
+                id="edit-modules"
                 type="text"
                 value={champs.modules}
                 onChange={(e) => setChamp("modules", e.target.value)}
@@ -290,11 +294,12 @@ function DetailADR() {
             </div>
 
             <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-slate-700">
+              <label htmlFor="edit-decideurs" className="block text-sm font-medium text-slate-700">
                 Décideurs
                 <span className="text-slate-400 font-normal ml-1">(virgule)</span>
               </label>
               <input
+                id="edit-decideurs"
                 type="text"
                 value={champs.decideurs}
                 onChange={(e) => setChamp("decideurs", e.target.value)}
@@ -306,9 +311,9 @@ function DetailADR() {
 
           <hr className="border-slate-100" />
 
-          <ChampTextarea label="Contexte" hint="Quel problème ?" value={champs.contexte} onChange={(v) => setChamp("contexte", v)} />
-          <ChampTextarea label="Décision" hint="Qu'a-t-on décidé ?" value={champs.decision} onChange={(v) => setChamp("decision", v)} />
-          <ChampTextarea label="Conséquences" hint="Impacts, compromis, risques" value={champs.consequences} onChange={(v) => setChamp("consequences", v)} />
+          <ChampTextarea id="edit-contexte" label="Contexte" hint="Quel problème ?" value={champs.contexte} onChange={(v) => setChamp("contexte", v)} />
+          <ChampTextarea id="edit-decision" label="Décision" hint="Qu'a-t-on décidé ?" value={champs.decision} onChange={(v) => setChamp("decision", v)} />
+          <ChampTextarea id="edit-consequences" label="Conséquences" hint="Impacts, compromis, risques" value={champs.consequences} onChange={(v) => setChamp("consequences", v)} />
 
           <div className="flex gap-3 pt-2">
             <button
@@ -389,8 +394,9 @@ function SectionConsequences({ contenu }: { contenu: string }) {
 }
 
 function ChampTextarea({
-  label, hint, value, onChange,
+  id, label, hint, value, onChange,
 }: {
+  id: string;
   label: string;
   hint: string;
   value: string;
@@ -398,11 +404,12 @@ function ChampTextarea({
 }) {
   return (
     <div className="space-y-1.5">
-      <label className="block text-sm font-medium text-slate-700">
+      <label htmlFor={id} className="block text-sm font-medium text-slate-700">
         {label}
         <span className="text-slate-400 font-normal ml-1">— {hint}</span>
       </label>
       <textarea
+        id={id}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         rows={4}
