@@ -1,6 +1,6 @@
 from datetime import date
 
-from teambrain.adr import ADR, list_adrs, load_adr, next_id, save_adr, search_adrs, slugify
+from teambrain.adr import ADR, delete_adr, list_adrs, load_adr, next_id, save_adr, search_adrs, slugify
 
 
 def make_adr(
@@ -92,3 +92,22 @@ def test_search_score_partiel(tmp_path):
     results = search_adrs("bdd inconnu", tmp_path)
     assert len(results) == 1
     assert results[0][1] == 0.5
+
+
+def test_delete_adr_existant(tmp_path):
+    save_adr(make_adr(1), tmp_path)
+    assert delete_adr(1, tmp_path) is True
+    assert list_adrs(tmp_path) == []
+
+
+def test_delete_adr_inexistant(tmp_path):
+    assert delete_adr(999, tmp_path) is False
+
+
+def test_delete_adr_laisse_les_autres(tmp_path):
+    save_adr(make_adr(1, "Premier"), tmp_path)
+    save_adr(make_adr(2, "Deuxième"), tmp_path)
+    delete_adr(1, tmp_path)
+    restants = list_adrs(tmp_path)
+    assert len(restants) == 1
+    assert restants[0].id == 2

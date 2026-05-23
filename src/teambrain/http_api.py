@@ -8,7 +8,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from .adr import ADR, list_adrs, next_id, save_adr, search_adrs
+from .adr import ADR, delete_adr, list_adrs, next_id, save_adr, search_adrs
 from .ai import generate_draft
 from .config import load_config
 from .store import search_semantic
@@ -32,6 +32,7 @@ class ADRReponse(BaseModel):
 class ADRPayload(BaseModel):
     titre: str
     statut: str = "propose"
+    date: str | None = None
     modules: list[str] = []
     decideurs: list[str] = []
     contexte: str = ""
@@ -248,10 +249,14 @@ def create_app(projets: dict[str, Path], static_dir: Path | None = None) -> Fast
             raise HTTPException(status_code=404, detail=f"ADR #{adr_id} introuvable dans {projet}")
 
         ancien_path = existant.path
+        try:
+            nouvelle_date = date.fromisoformat(payload.date) if payload.date else existant.date
+        except ValueError:
+            nouvelle_date = existant.date
         adr = ADR(
             id=adr_id,
             titre=payload.titre,
-            date=existant.date,
+            date=nouvelle_date,
             statut=payload.statut,
             modules=payload.modules,
             decideurs=payload.decideurs,
@@ -263,6 +268,14 @@ def create_app(projets: dict[str, Path], static_dir: Path | None = None) -> Fast
         if ancien_path and ancien_path != nouveau_path and ancien_path.exists():
             ancien_path.unlink()
         return _to_reponse(adr, projet)
+
+    # ── Suppression ADR ───────────────────────────────────────────────────────
+
+    @app.delete("/adr/{projet}/{adr_id}", status_code=204)
+    def supprimer_adr(projet: str, adr_id: int):
+        d = _require_projet(projet)
+        if not delete_adr(adr_id, d):
+            raise HTTPException(status_code=404, detail=f"ADR #{adr_id} introuvable dans {projet}")
 
     if static_dir and static_dir.exists():
         from fastapi.responses import FileResponse

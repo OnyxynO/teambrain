@@ -122,3 +122,23 @@ export function creerADR(
     body: JSON.stringify(payload),
   });
 }
+
+export function modifierADR(
+  projet: string,
+  id: number,
+  payload: Omit<ADR, "id" | "date" | "projet">
+): Promise<ADR> {
+  return apiFetch(`/adr/${projet}/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function supprimerADR(projet: string, id: number): Promise<void> {
+  const r = await fetch(`${API_URL}/adr/${projet}/${id}`, { method: "DELETE" });
+  if (!r.ok) {
+    const detail = await r.json().catch(() => ({ detail: r.statusText }));
+    throw new Error(detail.detail ?? `Erreur ${r.status}`);
+  }
+}

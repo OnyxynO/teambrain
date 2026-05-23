@@ -212,9 +212,43 @@ class TestModifierADR:
         r = client.put(f"/adr/{NOM}/1", json={"titre": "T", "statut": "remplace"})
         assert r.json()["date"] == "2026-05-20"
 
+    def test_modification_date(self, client: TestClient, adr_exemple: ADR):
+        r = client.put(f"/adr/{NOM}/1", json={"titre": "T", "statut": "accepte", "date": "2025-01-15"})
+        assert r.json()["date"] == "2025-01-15"
+
+    def test_modification_date_invalide_conserve_date(self, client: TestClient, adr_exemple: ADR):
+        r = client.put(f"/adr/{NOM}/1", json={"titre": "T", "statut": "accepte", "date": "pas-une-date"})
+        assert r.status_code == 200
+        assert r.json()["date"] == "2026-05-20"
+
     def test_introuvable(self, client: TestClient):
         r = client.put(f"/adr/{NOM}/999", json={"titre": "X"})
         assert r.status_code == 404
+
+
+# ── Suppression ADR ───────────────────────────────────────────────────────────
+
+class TestSupprimerADR:
+    def test_suppression_ok(self, client: TestClient, adr_exemple: ADR, decisions_dir: Path):
+        r = client.delete(f"/adr/{NOM}/1")
+        assert r.status_code == 204
+        assert len(list(decisions_dir.glob("*.md"))) == 0
+
+    def test_suppression_introuvable(self, client: TestClient):
+        r = client.delete(f"/adr/{NOM}/999")
+        assert r.status_code == 404
+
+    def test_suppression_projet_inconnu(self, client: TestClient, adr_exemple: ADR):
+        r = client.delete("/adr/inconnu/1")
+        assert r.status_code == 404
+
+    def test_suppression_laisse_les_autres(self, client: TestClient, decisions_dir: Path):
+        save_adr(ADR(id=1, titre="A", date=date.today(), statut="propose",
+                     modules=[], decideurs=[], contexte="", decision="", consequences=""), decisions_dir)
+        save_adr(ADR(id=2, titre="B", date=date.today(), statut="accepte",
+                     modules=[], decideurs=[], contexte="", decision="", consequences=""), decisions_dir)
+        client.delete(f"/adr/{NOM}/1")
+        assert len(list(decisions_dir.glob("*.md"))) == 1
 
 
 # ── Recherche ─────────────────────────────────────────────────────────────────

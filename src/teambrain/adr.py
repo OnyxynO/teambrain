@@ -104,6 +104,13 @@ def list_adrs(decisions_dir: Path) -> list[ADR]:
     return adrs
 
 
+def delete_adr(adr_id: int, decisions_dir: Path) -> bool:
+    for p in decisions_dir.glob(f"{adr_id:03d}-*.md"):
+        p.unlink()
+        return True
+    return False
+
+
 def next_id(decisions_dir: Path) -> int:
     existing = list_adrs(decisions_dir)
     return max((a.id for a in existing), default=0) + 1
