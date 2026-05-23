@@ -105,6 +105,7 @@ teambrain ui --base /path/to/projets/          # auto-détection
 - **Audit sécurité (2026-05-22)** : ✅ 7 corrections — path traversal serve_static, starlette 1.0.1, host 127.0.0.1, /health info disclosure, max_length draft, écriture atomique MCP setup, pytest 9.0.3.
 - **README v1.0 + version bump (2026-05-22)** : ✅ README complet, version 1.0.0 dans pyproject.toml.
 - **Décision UI (2026-05-22)** : `teambrain ui` passera de `webbrowser.open()` → **PyWebView** (fenêtre native WebKit). Séquence : (1) modifs UI sur le frontend Next.js d'abord, (2) intégration PyWebView. Publication v1.0.0 après.
+- **Module 7 — Édition/suppression (2026-05-23)** : ✅ Tous les champs d'un ADR sont éditables depuis l'interface web. Suppression avec confirmation en ligne. `DELETE /adr/{projet}/{adr_id}` ajouté à l'API. 116 tests Python (+ 9), 19 tests Playwright e2e (nouveau).
 
 ## Roadmap — prochaines évolutions
 
@@ -320,3 +321,11 @@ Exemple pour un repo style Conventional Commits français (ex: SAND) :
 **Module 5** :
 - Mode sémantique : `seuil_distance` est une distance cosine (0=identique, 1=orthogonal). Défaut : 0.3. L2 est désactivé dans `store.py` via `distance_metric=cosine` — sans cette déclaration explicite, sqlite-vec utilise L2 par défaut et les scores sont incorrects (Principe 18).
 - La vérification de l'index (`teambrain.db`) est faite **avant** la boucle des commits — une `RuntimeError` est levée immédiatement si le fichier est absent, sans attendre le premier commit.
+
+**Module 7 — Édition/suppression ADR (2026-05-23)** :
+- `DELETE /adr/{projet}/{adr_id}` retourne 204 (No Content) — `apiFetch` ne peut pas parser un body vide avec `r.json()` → wrapper séparé dans `api.ts` qui vérifie `r.ok` sans appeler `.json()`.
+- `PUT /adr/{projet}/{adr_id}` : si le titre change, `save_adr()` crée un nouveau fichier avec le nouveau slug — l'ancien fichier doit être supprimé explicitement (`ancien_path.unlink()`) sinon les deux coexistent.
+- `ADRPayload` accepte `date: str | None` — toujours valider avec `date.fromisoformat()` et fallback sur `existant.date` en cas d'exception : ne pas laisser une date invalide propager un 422.
+- **Playwright + `getByLabel` et labels avec span enfant** : un `<label>` contenant du texte + un `<span>` (ex: hint) ne se résout pas proprement via `getByLabel("texte")` sans `htmlFor`/`id`. Ajouter systématiquement `htmlFor` sur les labels et `id` sur les inputs/textareas des formulaires.
+- **Playwright + Next.js static export** : les liens générés par Next.js en mode `output: 'export'` ont un trailing slash (`/nouveau/` au lieu de `/nouveau`) — utiliser un matcher regex (`/\/nouveau/`) plutôt qu'une égalité stricte dans les assertions `toHaveAttribute("href", ...)`.
+- **Tests e2e avec données réelles** : créer les ADR de test via `request.post()` dans `beforeAll`/`beforeEach` et les supprimer dans `afterAll` — ne jamais dépendre d'un ID fixe du jeu de données réel (fragile si l'ADR est édité ou supprimé).
