@@ -272,7 +272,7 @@ function DetailADR() {
   /* ── Mode édition ── */
   if (modeEdit && champs) {
     return (
-      <div className="max-w-3xl space-y-6">
+      <div className="max-w-4xl space-y-6">
         {/* Breadcrumb */}
         <nav className="flex items-center gap-2 text-sm text-[#656d76]">
           <Link href="/" className="hover:text-[#0969da] transition-colors">
@@ -396,7 +396,7 @@ function DetailADR() {
 
   /* ── Mode lecture ── */
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 max-w-4xl">
       {/* Breadcrumb */}
       <nav className="flex items-center gap-2 text-sm text-[#656d76]">
         <Link href="/" className="hover:text-[#0969da] transition-colors">

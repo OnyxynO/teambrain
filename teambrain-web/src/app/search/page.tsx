@@ -50,7 +50,7 @@ export default function PageRecherche() {
   }
 
   return (
-    <div className="max-w-3xl space-y-5">
+    <div className="max-w-3xl space-y-4">
       <h1 className="text-xl font-semibold text-[#1f2328]">Recherche</h1>
 
       <form onSubmit={rechercher} className="space-y-3">

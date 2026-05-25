@@ -169,7 +169,7 @@ export default function PageNouveau() {
   }
 
   return (
-    <div className="max-w-2xl space-y-5">
+    <div className="max-w-2xl space-y-4">
       {/* Breadcrumb */}
       <nav className="flex items-center gap-2 text-sm text-[#656d76]">
         <Link href="/" className="hover:text-[#0969da] transition-colors">
