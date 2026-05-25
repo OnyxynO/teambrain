@@ -330,6 +330,11 @@ Exemple pour un repo style Conventional Commits français (ex: SAND) :
 - **Playwright + Next.js static export** : les liens générés par Next.js en mode `output: 'export'` ont un trailing slash (`/nouveau/` au lieu de `/nouveau`) — utiliser un matcher regex (`/\/nouveau/`) plutôt qu'une égalité stricte dans les assertions `toHaveAttribute("href", ...)`.
 - **Tests e2e avec données réelles** : créer les ADR de test via `request.post()` dans `beforeAll`/`beforeEach` et les supprimer dans `afterAll` — ne jamais dépendre d'un ID fixe du jeu de données réel (fragile si l'ADR est édité ou supprimé).
 
+**Recherche GitHub-style (2026-05-25)** :
+- **Redémarrage serveur obligatoire** après modification de `adr.py` ou `http_api.py` — Python charge les modules en mémoire au démarrage, `pip install -e .` (editable) ne suffit pas. Killer le PID et relancer `teambrain ui`.
+- `parse_query()` est appelé dans `http_api.py` pour extraire `projet:X` de la query et l'utiliser comme filtre de projet avant d'appeler `search_adrs`. Passer `req=` à `search_adrs` évite le double parsing.
+- `search_adrs` avec uniquement des qualificatifs (sans termes full-text) retourne `score=1.0` — c'est le comportement voulu pour `statut:accepte` seul.
+
 **Refonte visuelle GitHub-style (2026-05-25)** :
 - **`overflow-hidden` sur un conteneur coupe les tooltips `absolute bottom-full`** (qui sortent vers le haut) — même avec `z-index` élevé. Fix : retirer `overflow-hidden` du conteneur parent, ajouter `rounded-t-md` sur le header et `last:rounded-b-md` sur les items de liste pour conserver les coins arrondis.
 - **Playwright `getByRole("link", { name: X })` fait une correspondance insensible à la casse et sous-chaîne** — "TeamBrain" (logo Nav, href="/") matche la recherche `{ name: "teambrain" }`. Toujours scoper avec `page.locator("main").getByRole(...)` pour éviter les faux positifs du logo dans la nav.
