@@ -43,8 +43,8 @@ test.describe("Page détail — vue lecture", () => {
 
   test("le lien projet filtre la liste", async ({ page }) => {
     await page.goto(`/adr/?projet=${PROJET}&id=${adrId}`);
-    // Le lien projet apparaît dans la sidebar — on prend le premier
-    await page.getByRole("link", { name: PROJET }).first().click();
+    // Chercher dans <main> pour éviter le logo "TeamBrain" de la nav (même texte, cible différente)
+    await page.locator("main").getByRole("link", { name: PROJET }).first().click();
     await expect(page).toHaveURL(new RegExp(`projet=${PROJET}`));
   });
 });

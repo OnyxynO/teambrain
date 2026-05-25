@@ -215,43 +215,63 @@ function ListeADR() {
           <div className="flex items-center border-b border-[#d0d7de] px-4 bg-[#f6f8fa]">
 
             {/* Onglet Actifs */}
-            <button
-              onClick={() => setGroupe("actifs")}
-              className={[
-                "flex items-center gap-1.5 px-3 py-2.5 text-sm border-b-2 -mb-px transition-colors",
-                groupe === "actifs"
-                  ? "border-[#fd8c73] text-[#1f2328] font-semibold"
-                  : "border-transparent text-[#656d76] hover:text-[#1f2328]",
-              ].join(" ")}
-            >
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                <path d="M8 9.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z" />
-                <path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Z" />
-              </svg>
-              Actifs
-              <span className="text-xs tabular-nums bg-[#eaeef2] text-[#6e7781] px-1.5 py-0.5 rounded-full">
-                {cntActifs}
-              </span>
-            </button>
+            <div className="relative group/tab-actifs">
+              <button
+                onClick={() => setGroupe("actifs")}
+                className={[
+                  "flex items-center gap-1.5 px-3 py-2.5 text-sm border-b-2 -mb-px transition-colors",
+                  groupe === "actifs"
+                    ? "border-[#fd8c73] text-[#1f2328] font-semibold"
+                    : "border-transparent text-[#656d76] hover:text-[#1f2328]",
+                ].join(" ")}
+              >
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                  <path d="M8 9.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z" />
+                  <path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Z" />
+                </svg>
+                Actifs
+                <span className="text-xs tabular-nums bg-[#eaeef2] text-[#6e7781] px-1.5 py-0.5 rounded-full">
+                  {cntActifs}
+                </span>
+              </button>
+              {/* Tooltip */}
+              <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-30 opacity-0 group-hover/tab-actifs:opacity-100 transition-opacity duration-150">
+                <div className="bg-[#1f2328] text-white text-xs rounded-md px-2.5 py-1.5 whitespace-nowrap shadow-lg">
+                  Statuts : <span className="text-[#7ee787]">proposé</span> · <span className="text-[#bc8cff]">accepté</span>
+                </div>
+                <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-[#1f2328]" />
+              </div>
+            </div>
 
             {/* Onglet Archivés */}
-            <button
-              onClick={() => setGroupe("archives")}
-              className={[
-                "flex items-center gap-1.5 px-3 py-2.5 text-sm border-b-2 -mb-px transition-colors",
-                groupe === "archives"
-                  ? "border-[#fd8c73] text-[#1f2328] font-semibold"
-                  : "border-transparent text-[#656d76] hover:text-[#1f2328]",
-              ].join(" ")}
-            >
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                <path d="M8 16A8 8 0 1 1 8 0a8 8 0 0 1 0 16Zm3.78-9.72a.75.75 0 0 0-1.06-1.06L6.75 9.19 5.28 7.72a.75.75 0 0 0-1.06 1.06l2 2a.75.75 0 0 0 1.06 0l4.5-4.5Z" />
-              </svg>
-              Archivés
-              <span className="text-xs tabular-nums bg-[#eaeef2] text-[#6e7781] px-1.5 py-0.5 rounded-full">
-                {cntArchives}
-              </span>
-            </button>
+            <div className="relative group/tab-archives">
+              <button
+                onClick={() => setGroupe("archives")}
+                className={[
+                  "flex items-center gap-1.5 px-3 py-2.5 text-sm border-b-2 -mb-px transition-colors",
+                  groupe === "archives"
+                    ? "border-[#fd8c73] text-[#1f2328] font-semibold"
+                    : "border-transparent text-[#656d76] hover:text-[#1f2328]",
+                ].join(" ")}
+              >
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                  <path d="M8 16A8 8 0 1 1 8 0a8 8 0 0 1 0 16Zm3.78-9.72a.75.75 0 0 0-1.06-1.06L6.75 9.19 5.28 7.72a.75.75 0 0 0-1.06 1.06l2 2a.75.75 0 0 0 1.06 0l4.5-4.5Z" />
+                </svg>
+                Archivés
+                <span className="text-xs tabular-nums bg-[#eaeef2] text-[#6e7781] px-1.5 py-0.5 rounded-full">
+                  {cntArchives}
+                </span>
+              </button>
+              {/* Tooltip */}
+              <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-30 opacity-0 group-hover/tab-archives:opacity-100 transition-opacity duration-150">
+                <div className="bg-[#1f2328] text-white text-xs rounded-md px-2.5 py-1.5 whitespace-nowrap shadow-lg text-center">
+                  Statuts : <span className="text-[#f85149]">déprécié</span> · <span className="text-[#6e7781]">remplacé</span>
+                  <br />
+                  <span className="text-[#8d96a0]">Changer le statut via Éditer</span>
+                </div>
+                <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-[#1f2328]" />
+              </div>
+            </div>
 
             <div className="flex-1" />
 
