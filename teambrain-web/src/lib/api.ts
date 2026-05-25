@@ -17,6 +17,7 @@ export interface ProjetInfo {
   id: string;
   nom: string;
   nb_adrs: number;
+  index_disponible: boolean;
 }
 
 export interface ResultatRecherche {

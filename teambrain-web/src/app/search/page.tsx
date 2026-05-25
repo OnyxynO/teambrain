@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState, useTransition, useEffect, useRef } from "react";
-import { rechercherADR, listerProjets, type ResultatRecherche, type ProjetInfo } from "@/lib/api";
+import { rechercherADR, listerProjets, getHealth, type ResultatRecherche, type ProjetInfo } from "@/lib/api";
 import { StatutBadge } from "@/components/StatutBadge";
 
 /* ── Types ── */
@@ -126,11 +126,29 @@ export default function PageRecherche() {
   const [rechercheFaite, setRechercheFaite] = useState(false);
   const [projets, setProjets] = useState<ProjetInfo[]>([]);
   const [aideVisible, setAideVisible] = useState(false);
+  const [ollamaDisponible, setOllamaDisponible] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    listerProjets().then(setProjets).catch(() => {});
+    Promise.all([
+      listerProjets(),
+      getHealth(),
+    ]).then(([ps, health]) => {
+      setProjets(ps);
+      setOllamaDisponible(health.ollama_disponible);
+    }).catch(() => {});
   }, []);
+
+  // Si un seul projet a un index et que la recherche sémantique s'active,
+  // injecter automatiquement projet:nom dans la query
+  useEffect(() => {
+    if (!semantic) return;
+    const projetsIndexes = projets.filter((p) => p.index_disponible);
+    if (projetsIndexes.length === 1 && !query.match(/\bprojet:/i)) {
+      setQuery((q) => q ? `projet:${projetsIndexes[0].id} ${q}`.trim() : `projet:${projetsIndexes[0].id}`);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [semantic]);
 
   // Focus sur le champ au chargement
   useEffect(() => {
@@ -239,23 +257,45 @@ export default function PageRecherche() {
           </div>
         )}
 
-        {/* ── Option sémantique ── */}
-        <div className="flex items-center gap-3 px-1">
-          <label className="flex items-center gap-2 text-sm text-[#1f2328] cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={semantic}
-              onChange={(e) => setSemantic(e.target.checked)}
-              className="rounded border-[#d0d7de] text-[#0969da]"
-            />
-            Recherche sémantique
-          </label>
-          {semantic && projets.length > 1 && !query.match(/\bprojet:/i) && (
-            <span className="text-[#9a6700] text-xs bg-[#fff8c5] px-2 py-0.5 rounded-full border border-[#e3b341]">
-              ajouter <code className="font-mono">projet:nom</code> dans la requête
-            </span>
-          )}
-        </div>
+        {/* ── Option sémantique — visible seulement si Ollama est up + au moins 1 index ── */}
+        {ollamaDisponible && projets.some((p) => p.index_disponible) && (
+          <div className="flex items-center gap-3 px-1">
+            <div className="relative group/semantic flex items-center gap-2">
+              <label className="flex items-center gap-2 text-sm text-[#1f2328] cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={semantic}
+                  onChange={(e) => setSemantic(e.target.checked)}
+                  className="rounded border-[#d0d7de] text-[#0969da]"
+                />
+                Recherche sémantique
+              </label>
+              {/* Icône info + tooltip */}
+              <span className="relative cursor-default">
+                <svg
+                  width="14" height="14" viewBox="0 0 16 16"
+                  fill="#6e7781"
+                  className="group-hover/semantic:fill-[#0969da] transition-colors"
+                  aria-hidden="true"
+                >
+                  <path d="M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8Zm8-6.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13ZM7.25 9.5V8.75a.75.75 0 0 1 1.5 0v.75h.25a.75.75 0 0 1 0 1.5h-2a.75.75 0 0 1 0-1.5h.25Zm1.5-3.75a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Z" />
+                </svg>
+                <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-30 opacity-0 group-hover/semantic:opacity-100 transition-opacity duration-150 w-64">
+                  <div className="bg-[#1f2328] text-white text-xs rounded-md px-3 py-2 shadow-lg leading-relaxed">
+                    Trouve des décisions <span className="text-[#7ee787]">sémantiquement proches</span> sans correspondance exacte des mots.{" "}
+                    Nécessite <code className="font-mono bg-[#ffffff20] px-1 rounded">teambrain index</code> dans le repo.
+                  </div>
+                  <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-[#1f2328]" />
+                </div>
+              </span>
+            </div>
+            {semantic && projets.filter((p) => p.index_disponible).length > 1 && !query.match(/\bprojet:/i) && (
+              <span className="text-[#9a6700] text-xs bg-[#fff8c5] px-2 py-0.5 rounded-full border border-[#e3b341]">
+                ajouter <code className="font-mono">projet:nom</code> dans la requête
+              </span>
+            )}
+          </div>
+        )}
       </form>
 
       {/* ── Erreur ── */}

@@ -49,6 +49,7 @@ class ProjetInfo(BaseModel):
     id: str
     nom: str
     nb_adrs: int
+    index_disponible: bool  # True si teambrain.db existe (index sémantique buildé)
 
 
 def _to_reponse(adr: ADR, projet: str) -> ADRReponse:
@@ -131,7 +132,12 @@ def create_app(projets: dict[str, Path], static_dir: Path | None = None) -> Fast
     @app.get("/projects", response_model=list[ProjetInfo])
     def liste_projets():
         return [
-            ProjetInfo(id=nom, nom=nom, nb_adrs=len(list_adrs(d)))
+            ProjetInfo(
+                id=nom,
+                nom=nom,
+                nb_adrs=len(list_adrs(d)),
+                index_disponible=(d / "teambrain.db").exists(),
+            )
             for nom, d in projets.items()
         ]
 
