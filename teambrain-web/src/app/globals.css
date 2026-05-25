@@ -1,1 +1,28 @@
 @import "tailwindcss";
+
+/* ── GitHub Light color tokens ── */
+:root {
+  --gh-canvas-default:   #ffffff;
+  --gh-canvas-subtle:    #f6f8fa;
+  --gh-canvas-inset:     #f0f2f5;
+  --gh-border-default:   #d0d7de;
+  --gh-border-muted:     #d8dee4;
+  --gh-fg-default:       #1f2328;
+  --gh-fg-muted:         #656d76;
+  --gh-fg-subtle:        #6e7781;
+  --gh-accent-fg:        #0969da;
+  --gh-success-fg:       #1a7f37;
+  --gh-success-subtle:   #dafbe1;
+  --gh-attention-fg:     #9a6700;
+  --gh-attention-subtle: #fff8c5;
+  --gh-danger-fg:        #d1242f;
+  --gh-danger-subtle:    #ffebe9;
+  --gh-done-fg:          #8250df;
+  --gh-done-subtle:      #fbefff;
+  --gh-neutral-fg:       #6e7781;
+  --gh-neutral-subtle:   #eaeef2;
+  --gh-header-bg:        #24292f;
+  --gh-btn-primary-bg:   #1f883d;
+  --gh-btn-primary-hover:#1a7f37;
+  --gh-btn-primary-text: #ffffff;
+}

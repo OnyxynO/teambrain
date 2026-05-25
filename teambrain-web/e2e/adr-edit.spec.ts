@@ -38,12 +38,13 @@ test.describe("Page détail — vue lecture", () => {
 
   test("affiche le badge statut", async ({ page }) => {
     await page.goto(`/adr/?projet=${PROJET}&id=${adrId}`);
-    await expect(page.getByText("propose")).toBeVisible();
+    await expect(page.getByText("Proposé").first()).toBeVisible();
   });
 
   test("le lien projet filtre la liste", async ({ page }) => {
     await page.goto(`/adr/?projet=${PROJET}&id=${adrId}`);
-    await page.getByRole("link", { name: PROJET }).click();
+    // Le lien projet apparaît dans la sidebar — on prend le premier
+    await page.getByRole("link", { name: PROJET }).first().click();
     await expect(page).toHaveURL(new RegExp(`projet=${PROJET}`));
   });
 });
@@ -107,7 +108,7 @@ test.describe("Édition ADR", () => {
     await page.getByRole("button", { name: "Éditer" }).click();
     await page.getByLabel("Statut").selectOption("accepte");
     await page.getByRole("button", { name: "Sauvegarder" }).click();
-    await expect(page.getByText("accepte")).toBeVisible();
+    await expect(page.getByText("Accepté").first()).toBeVisible();
   });
 
   test("modifier les champs texte longs", async ({ page }) => {
