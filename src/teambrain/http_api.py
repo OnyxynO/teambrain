@@ -8,7 +8,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from .adr import ADR, delete_adr, list_adrs, next_id, save_adr, search_adrs
+from .adr import ADR, delete_adr, list_adrs, next_id, parse_query, save_adr, search_adrs
 from .ai import generate_draft
 from .config import load_config
 from .store import search_semantic
@@ -161,29 +161,35 @@ def create_app(projets: dict[str, Path], static_dir: Path | None = None) -> Fast
         semantic: bool = Query(False),
         k: int = Query(10, ge=1, le=50),
     ):
+        # Parser la requête pour extraire les qualificatifs (statut:, module:, projet:, etc.)
+        req = parse_query(q)
+
+        # Le qualificatif projet: dans la query prend le dessus sur ?projet=
+        projet_effectif: str | None = req.projets[0] if req.projets else projet
+
         if semantic:
-            if not projet or projet not in projets:
+            if not projet_effectif or projet_effectif not in projets:
                 raise HTTPException(
                     status_code=400,
-                    detail="La recherche sémantique requiert ?projet= (index local par repo).",
+                    detail="La recherche sémantique requiert ?projet= ou projet: dans la requête (index local par repo).",
                 )
-            config = configs[projet]
-            d = projets[projet]
+            config = configs[projet_effectif]
+            d = projets[projet_effectif]
             resultats_ids = search_semantic(q, d, config, k=k)
             if not resultats_ids:
                 return {"resultats": [], "index_disponible": False}
             adrs_par_id = {a.id: a for a in list_adrs(d)}
             resultats = [
-                {"adr": _to_reponse(adrs_par_id[adr_id], projet), "score": round(1.0 - dist, 3)}
+                {"adr": _to_reponse(adrs_par_id[adr_id], projet_effectif), "score": round(1.0 - dist, 3)}
                 for adr_id, dist in resultats_ids
                 if adr_id in adrs_par_id
             ]
             return {"resultats": resultats, "index_disponible": True}
         else:
-            noms = [projet] if projet and projet in projets else list(projets.keys())
+            noms = [projet_effectif] if projet_effectif and projet_effectif in projets else list(projets.keys())
             resultats = []
             for nom in noms:
-                for adr, score in search_adrs(q, projets[nom]):
+                for adr, score in search_adrs(q, projets[nom], req=req):
                     resultats.append({"adr": _to_reponse(adr, nom), "score": round(score, 3)})
             resultats.sort(key=lambda x: x["score"], reverse=True)
             return {"resultats": resultats[:k], "index_disponible": None}

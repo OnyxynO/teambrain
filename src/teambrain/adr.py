@@ -116,18 +116,192 @@ def next_id(decisions_dir: Path) -> int:
     return max((a.id for a in existing), default=0) + 1
 
 
-def search_adrs(query: str, decisions_dir: Path) -> list[tuple[ADR, float]]:
-    """Recherche texte simple — Module 1. Module 2 apportera sqlite-vec."""
-    words = query.lower().split()
-    if not words:
-        return []
-    results = []
+@dataclass
+class RequeteParsee:
+    """Résultat du parsing d'une requête style GitHub."""
+    statuts: list[str]
+    modules: list[str]
+    decideurs: list[str]
+    projets: list[str]       # pour http_api.py : projet:X dans la query
+    champs: list[str]        # in:titre / in:decision / in:contexte / in:consequences
+    phrases: list[str]       # "phrase exacte"
+    regexps: list[str]       # /pattern/
+    termes: list[str]        # termes full-text positifs
+    exclusions: list[str]    # -terme (exclusions)
+
+
+def parse_query(query: str) -> RequeteParsee:
+    """
+    Parse une requête de recherche style GitHub Code Search.
+
+    Syntaxe supportée :
+      statut:accepte    — filtre par statut
+      module:auth       — filtre par module
+      decideur:alice    — filtre par décideur
+      projet:teambrain  — filtre par projet
+      in:titre          — restreindre full-text à un champ (titre|decision|contexte|consequences)
+      "phrase exacte"   — correspondance de phrase
+      /regex/           — expression régulière
+      -terme            — exclure un terme
+      terme             — recherche full-text
+    """
+    statuts: list[str] = []
+    modules: list[str] = []
+    decideurs: list[str] = []
+    projets: list[str] = []
+    champs: list[str] = []
+    phrases: list[str] = []
+    regexps: list[str] = []
+    termes: list[str] = []
+    exclusions: list[str] = []
+
+    # 1. Extraire les phrases exactes ("...")
+    for m in re.finditer(r'"([^"]+)"', query):
+        phrases.append(m.group(1).lower())
+    query = re.sub(r'"[^"]+"', " ", query)
+
+    # 2. Extraire les expressions régulières (/.../)
+    for m in re.finditer(r"/([^/]+)/", query):
+        regexps.append(m.group(1))
+    query = re.sub(r"/[^/]+/", " ", query)
+
+    # 3. Extraire les qualificatifs field:value
+    QUALS: dict[str, list[str]] = {
+        "statut": statuts,
+        "module": modules,
+        "decideur": decideurs,
+        "projet": projets,
+        "in": champs,
+    }
+    for qual, lst in QUALS.items():
+        for m in re.finditer(rf"\b{qual}:(\S+)", query, re.IGNORECASE):
+            lst.append(m.group(1).lower())
+        query = re.sub(rf"\b{qual}:\S+", " ", query, flags=re.IGNORECASE)
+
+    # 4. Termes restants (ignorer AND/OR comme opérateurs)
+    for token in query.split():
+        if token.upper() in ("AND", "OR"):
+            continue
+        if token.startswith("-") and len(token) > 1:
+            exclusions.append(token[1:].lower())
+        else:
+            termes.append(token.lower())
+
+    return RequeteParsee(
+        statuts=statuts,
+        modules=modules,
+        decideurs=decideurs,
+        projets=projets,
+        champs=champs,
+        phrases=phrases,
+        regexps=regexps,
+        termes=termes,
+        exclusions=exclusions,
+    )
+
+
+# Champs disponibles pour in:
+_CHAMPS_DISPONIBLES = {"titre", "decision", "contexte", "consequences"}
+_CHAMPS_ALIASES: dict[str, str] = {
+    "décision": "decision",
+    "conséquences": "consequences",
+    "consequence": "consequences",
+}
+
+
+def _get_champs(adr: ADR, champs: list[str]) -> list[str]:
+    """Retourne les valeurs des champs demandés par in:. Défaut : tous."""
+    if not champs:
+        return [adr.titre, adr.contexte, adr.decision, adr.consequences,
+                " ".join(adr.modules), " ".join(adr.decideurs)]
+    parts = []
+    for c in champs:
+        c = _CHAMPS_ALIASES.get(c, c)
+        if c == "titre":
+            parts.append(adr.titre)
+        elif c == "decision":
+            parts.append(adr.decision)
+        elif c == "contexte":
+            parts.append(adr.contexte)
+        elif c == "consequences":
+            parts.append(adr.consequences)
+    return parts
+
+
+def search_adrs(
+    query: str, decisions_dir: Path, req: RequeteParsee | None = None
+) -> list[tuple[ADR, float]]:
+    """
+    Recherche avec syntaxe GitHub-style.
+    Si `req` est fourni (déjà parsé par http_api pour extraire projet:),
+    on l'utilise directement sans re-parser.
+    """
+    if req is None:
+        req = parse_query(query)
+
+    results: list[tuple[ADR, float]] = []
+
     for adr in list_adrs(decisions_dir):
-        haystack = " ".join([
-            adr.titre, adr.contexte, adr.decision, adr.consequences,
-            " ".join(adr.modules),
-        ]).lower()
-        score = sum(1 for w in words if w in haystack) / len(words)
-        if score > 0:
-            results.append((adr, score))
+
+        # ── Filtres stricts (éliminatoires) ──────────────────────────────────
+
+        if req.statuts and adr.statut.lower() not in req.statuts:
+            continue
+
+        if req.modules:
+            adr_modules_lower = [m.lower() for m in adr.modules]
+            if not any(m in adr_modules_lower for m in req.modules):
+                continue
+
+        if req.decideurs:
+            adr_decideurs_lower = [d.lower() for d in adr.decideurs]
+            if not any(d in " ".join(adr_decideurs_lower) for d in req.decideurs):
+                continue
+
+        # ── Score full-text ───────────────────────────────────────────────────
+
+        haystack_parts = _get_champs(adr, req.champs)
+        haystack = " ".join(haystack_parts).lower()
+
+        # Exclusions : si un terme exclu est présent → éliminé
+        if any(ex in haystack for ex in req.exclusions):
+            continue
+
+        score = 0.0
+        total_criteres = len(req.termes) + len(req.phrases) + len(req.regexps)
+
+        if total_criteres == 0:
+            # Requête purement à qualificatifs : score 1.0 si les filtres passent
+            score = 1.0
+        else:
+            # Termes simples
+            for terme in req.termes:
+                if terme in haystack:
+                    # Bonus si dans le titre
+                    if terme in adr.titre.lower():
+                        score += 1.5
+                    else:
+                        score += 1.0
+
+            # Phrases exactes
+            for phrase in req.phrases:
+                if phrase in haystack:
+                    score += 2.0
+
+            # Expressions régulières
+            for pattern in req.regexps:
+                try:
+                    if re.search(pattern, haystack, re.IGNORECASE):
+                        score += 2.0
+                except re.error:
+                    if pattern in haystack:
+                        score += 1.0
+
+            if score == 0:
+                continue
+            # Normaliser sur le nombre de critères (bonus titre pouvant dépasser 1.0)
+            score = min(score / total_criteres, 1.0)
+
+        results.append((adr, round(score, 3)))
+
     return sorted(results, key=lambda x: x[1], reverse=True)
