@@ -131,6 +131,8 @@ export default function PageRecherche() {
   const [ollamaDisponible, setOllamaDisponible] = useState(false);
   const [indexStatuts, setIndexStatuts] = useState<Record<string, IndexStatut>>({});
   const inputRef = useRef<HTMLInputElement>(null);
+  // Ref pour contrôler le polling par projet (faux = arrêt, ex : démontage du composant)
+  const pollingActifRef = useRef<Record<string, boolean>>({});
 
   // Chargement initial : projets + health + statuts d'index en parallèle
   useEffect(() => {
@@ -148,26 +150,47 @@ export default function PageRecherche() {
         setIndexStatuts(map);
       } catch {}
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      // Arrêter tous les pollings en cours si le composant est démonté
+      Object.keys(pollingActifRef.current).forEach((k) => { pollingActifRef.current[k] = false; });
+    };
   }, []);
 
   // Lancer l'indexation d'un projet + polling jusqu'à la fin
   async function demarrerIndex(nomProjet: string) {
+    pollingActifRef.current[nomProjet] = true;
     try {
       const s = await lancerIndexation(nomProjet);
       setIndexStatuts((prev) => ({ ...prev, [nomProjet]: s }));
       const poll = async () => {
-        const statut = await getIndexStatut(nomProjet);
-        setIndexStatuts((prev) => ({ ...prev, [nomProjet]: statut }));
-        if (statut.statut === "en_cours") {
-          setTimeout(poll, 2000);
-        } else {
-          // Rafraîchir la liste des projets pour mettre à jour index_disponible
-          listerProjets().then((ps) => setProjets(ps)).catch(() => {});
+        if (!pollingActifRef.current[nomProjet]) return;
+        try {
+          const statut = await getIndexStatut(nomProjet);
+          setIndexStatuts((prev) => ({ ...prev, [nomProjet]: statut }));
+          if (statut.statut === "en_cours") {
+            setTimeout(poll, 2000);
+          } else {
+            pollingActifRef.current[nomProjet] = false;
+            // Rafraîchir la liste des projets pour mettre à jour index_disponible
+            listerProjets().then((ps) => setProjets(ps)).catch(() => {});
+          }
+        } catch {
+          pollingActifRef.current[nomProjet] = false;
         }
       };
       setTimeout(poll, 2000);
-    } catch {}
+    } catch (err) {
+      pollingActifRef.current[nomProjet] = false;
+      setIndexStatuts((prev) => ({
+        ...prev,
+        [nomProjet]: {
+          projet: nomProjet,
+          statut: "erreur",
+          detail: err instanceof Error ? err.message : "Erreur réseau",
+        },
+      }));
+    }
   }
 
   // Si un seul projet a un index et que la recherche sémantique s'active,
@@ -187,6 +210,10 @@ export default function PageRecherche() {
   }, []);
 
   const qualificatifs = detecterQualificatifs(query);
+
+  // Calcul des conditions sémantiques (utilisé dans le formulaire + le panneau)
+  const aUnIndex = projets.some((p) => p.index_disponible);
+  const semantiqueActif = ollamaDisponible && aUnIndex;
 
   function rechercher(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -288,50 +315,44 @@ export default function PageRecherche() {
         )}
 
         {/* ── Option sémantique — toujours visible, désactivée si conditions non remplies ── */}
-        {(() => {
-          const aUnIndex = projets.some((p) => p.index_disponible);
-          const actif = ollamaDisponible && aUnIndex;
-          return (
-            <div className="flex items-center gap-3 px-1">
-              <div className={`relative group/semantic flex items-center gap-2 ${!actif ? "opacity-50" : ""}`}>
-                <label className={`flex items-center gap-2 text-sm text-[#1f2328] select-none ${actif ? "cursor-pointer" : "cursor-not-allowed"}`}>
-                  <input
-                    type="checkbox"
-                    checked={semantic}
-                    disabled={!actif}
-                    onChange={(e) => setSemantic(e.target.checked)}
-                    className="rounded border-[#d0d7de] text-[#0969da] disabled:cursor-not-allowed"
-                  />
-                  Recherche sémantique
-                </label>
-                {/* Icône info + tooltip */}
-                <span className="relative cursor-default">
-                  <svg width="14" height="14" viewBox="0 0 16 16" fill="#6e7781"
-                    className="group-hover/semantic:fill-[#0969da] transition-colors" aria-hidden="true">
-                    <path d="M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8Zm8-6.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13ZM7.25 9.5V8.75a.75.75 0 0 1 1.5 0v.75h.25a.75.75 0 0 1 0 1.5h-2a.75.75 0 0 1 0-1.5h.25Zm1.5-3.75a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Z" />
-                  </svg>
-                  <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-30 opacity-0 group-hover/semantic:opacity-100 transition-opacity duration-150 w-64">
-                    <div className="bg-[#1f2328] text-white text-xs rounded-md px-3 py-2 shadow-lg leading-relaxed">
-                      {!ollamaDisponible ? (
-                        <><span className="text-[#f85149]">Ollama non disponible.</span> Lance <code className="font-mono bg-[#ffffff20] px-1 rounded">ollama serve</code> puis relance le serveur.</>
-                      ) : !aUnIndex ? (
-                        <><span className="text-[#d4a72c]">Aucun index construit.</span> Utilise le bouton <strong>Indexer</strong> ci-dessous pour chaque projet.</>
-                      ) : (
-                        <>Trouve des décisions <span className="text-[#7ee787]">sémantiquement proches</span> sans correspondance exacte des mots.</>
-                      )}
-                    </div>
-                    <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-[#1f2328]" />
-                  </div>
-                </span>
+        <div className="flex items-center gap-3 px-1">
+          <div className={`relative group/semantic flex items-center gap-2 ${!semantiqueActif ? "opacity-50" : ""}`}>
+            <label className={`flex items-center gap-2 text-sm text-[#1f2328] select-none ${semantiqueActif ? "cursor-pointer" : "cursor-not-allowed"}`}>
+              <input
+                type="checkbox"
+                checked={semantic}
+                disabled={!semantiqueActif}
+                onChange={(e) => setSemantic(e.target.checked)}
+                className="rounded border-[#d0d7de] text-[#0969da] disabled:cursor-not-allowed"
+              />
+              Recherche sémantique
+            </label>
+            {/* Icône info + tooltip */}
+            <span className="relative cursor-default">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="#6e7781"
+                className="group-hover/semantic:fill-[#0969da] transition-colors" aria-hidden="true">
+                <path d="M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8Zm8-6.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13ZM7.25 9.5V8.75a.75.75 0 0 1 1.5 0v.75h.25a.75.75 0 0 1 0 1.5h-2a.75.75 0 0 1 0-1.5h.25Zm1.5-3.75a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Z" />
+              </svg>
+              <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-30 opacity-0 group-hover/semantic:opacity-100 transition-opacity duration-150 w-64">
+                <div className="bg-[#1f2328] text-white text-xs rounded-md px-3 py-2 shadow-lg leading-relaxed">
+                  {!ollamaDisponible ? (
+                    <><span className="text-[#f85149]">Ollama non disponible.</span> Lance <code className="font-mono bg-[#ffffff20] px-1 rounded">ollama serve</code> puis relance le serveur.</>
+                  ) : !aUnIndex ? (
+                    <><span className="text-[#d4a72c]">Aucun index construit.</span> Utilise le bouton <strong>Indexer</strong> ci-dessous pour chaque projet.</>
+                  ) : (
+                    <>Trouve des décisions <span className="text-[#7ee787]">sémantiquement proches</span> sans correspondance exacte des mots.</>
+                  )}
+                </div>
+                <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-[#1f2328]" />
               </div>
-              {semantic && actif && projets.filter((p) => p.index_disponible).length > 1 && !query.match(/\bprojet:/i) && (
-                <span className="text-[#9a6700] text-xs bg-[#fff8c5] px-2 py-0.5 rounded-full border border-[#e3b341]">
-                  ajouter <code className="font-mono">projet:nom</code> dans la requête
-                </span>
-              )}
-            </div>
-          );
-        })()}
+            </span>
+          </div>
+          {semantic && semantiqueActif && projets.filter((p) => p.index_disponible).length > 1 && !query.match(/\bprojet:/i) && (
+            <span className="text-[#9a6700] text-xs bg-[#fff8c5] px-2 py-0.5 rounded-full border border-[#e3b341]">
+              ajouter <code className="font-mono">projet:nom</code> dans la requête
+            </span>
+          )}
+        </div>
       </form>
 
       {/* ── Panneau d'indexation sémantique ── */}
