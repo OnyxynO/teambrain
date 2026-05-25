@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
 from datetime import date
 from pathlib import Path
+from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,7 +13,7 @@ from pydantic import BaseModel, Field
 from .adr import ADR, delete_adr, list_adrs, next_id, parse_query, save_adr, search_adrs
 from .ai import generate_draft
 from .config import load_config
-from .store import search_semantic
+from .store import reindex, search_semantic
 
 
 # ── Schémas ───────────────────────────────────────────────────────────────────
@@ -52,6 +54,13 @@ class ProjetInfo(BaseModel):
     index_disponible: bool  # True si teambrain.db existe (index sémantique buildé)
 
 
+class IndexStatut(BaseModel):
+    projet: str
+    statut: Literal["idle", "en_cours", "ok", "erreur"]
+    nb_adrs: int | None = None   # rempli quand statut="ok"
+    detail: str | None = None    # message d'erreur si statut="erreur"
+
+
 def _to_reponse(adr: ADR, projet: str) -> ADRReponse:
     return ADRReponse(
         projet=projet,
@@ -75,6 +84,15 @@ def create_app(projets: dict[str, Path], static_dir: Path | None = None) -> Fast
     static_dir : dossier du build Next.js (out/) — active le serving de l'UI
     """
     configs = {nom: load_config(d) for nom, d in projets.items()}
+
+    # État d'indexation en mémoire — initialisé selon la présence du fichier DB
+    _index_statuts: dict[str, IndexStatut] = {
+        nom: IndexStatut(
+            projet=nom,
+            statut="ok" if (d / "teambrain.db").exists() else "idle",
+        )
+        for nom, d in projets.items()
+    }
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -140,6 +158,45 @@ def create_app(projets: dict[str, Path], static_dir: Path | None = None) -> Fast
             )
             for nom, d in projets.items()
         ]
+
+    # ── Indexation sémantique ─────────────────────────────────────────────────
+
+    @app.get("/index/{projet}", response_model=IndexStatut)
+    def statut_index(projet: str):
+        if projet not in projets:
+            raise HTTPException(status_code=404, detail=f"Projet « {projet} » introuvable")
+        s = _index_statuts[projet]
+        # Synchroniser index_disponible avec la réalité disque
+        if s.statut == "idle":
+            s.nb_adrs = None
+        return s
+
+    @app.post("/index/{projet}", response_model=IndexStatut, status_code=202)
+    async def lancer_indexation(projet: str):
+        if projet not in projets:
+            raise HTTPException(status_code=404, detail=f"Projet « {projet} » introuvable")
+        s = _index_statuts[projet]
+        if s.statut == "en_cours":
+            return s  # déjà en cours, idempotent
+
+        s.statut = "en_cours"
+        s.nb_adrs = None
+        s.detail = None
+        d = projets[projet]
+        config = configs[projet]
+
+        async def _run():
+            loop = asyncio.get_running_loop()
+            try:
+                nb = await loop.run_in_executor(None, lambda: reindex(d, config))
+                _index_statuts[projet].statut = "ok"
+                _index_statuts[projet].nb_adrs = nb
+            except Exception as exc:
+                _index_statuts[projet].statut = "erreur"
+                _index_statuts[projet].detail = str(exc)
+
+        asyncio.create_task(_run())
+        return s
 
     # ── Référentiels ──────────────────────────────────────────────────────────
 

@@ -2,7 +2,10 @@
 
 import Link from "next/link";
 import { useState, useTransition, useEffect, useRef } from "react";
-import { rechercherADR, listerProjets, getHealth, type ResultatRecherche, type ProjetInfo } from "@/lib/api";
+import {
+  rechercherADR, listerProjets, getHealth, getIndexStatut, lancerIndexation,
+  type ResultatRecherche, type ProjetInfo, type IndexStatut,
+} from "@/lib/api";
 import { StatutBadge } from "@/components/StatutBadge";
 
 /* ── Types ── */
@@ -120,24 +123,52 @@ export default function PageRecherche() {
   const [query, setQuery] = useState("");
   const [semantic, setSemantic] = useState(false);
   const [resultats, setResultats] = useState<ResultatRecherche[]>([]);
-  const [indexDispo, setIndexDispo] = useState<boolean | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [rechercheFaite, setRechercheFaite] = useState(false);
   const [projets, setProjets] = useState<ProjetInfo[]>([]);
   const [aideVisible, setAideVisible] = useState(false);
   const [ollamaDisponible, setOllamaDisponible] = useState(false);
+  const [indexStatuts, setIndexStatuts] = useState<Record<string, IndexStatut>>({});
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Chargement initial : projets + health + statuts d'index en parallèle
   useEffect(() => {
-    Promise.all([
-      listerProjets(),
-      getHealth(),
-    ]).then(([ps, health]) => {
-      setProjets(ps);
-      setOllamaDisponible(health.ollama_disponible);
-    }).catch(() => {});
+    let cancelled = false;
+    (async () => {
+      try {
+        const [ps, health] = await Promise.all([listerProjets(), getHealth()]);
+        if (cancelled) return;
+        setProjets(ps);
+        setOllamaDisponible(health.ollama_disponible);
+        const statuts = await Promise.all(ps.map((p) => getIndexStatut(p.id).catch(() => null)));
+        if (cancelled) return;
+        const map: Record<string, IndexStatut> = {};
+        statuts.forEach((s) => { if (s) map[s.projet] = s; });
+        setIndexStatuts(map);
+      } catch {}
+    })();
+    return () => { cancelled = true; };
   }, []);
+
+  // Lancer l'indexation d'un projet + polling jusqu'à la fin
+  async function demarrerIndex(nomProjet: string) {
+    try {
+      const s = await lancerIndexation(nomProjet);
+      setIndexStatuts((prev) => ({ ...prev, [nomProjet]: s }));
+      const poll = async () => {
+        const statut = await getIndexStatut(nomProjet);
+        setIndexStatuts((prev) => ({ ...prev, [nomProjet]: statut }));
+        if (statut.statut === "en_cours") {
+          setTimeout(poll, 2000);
+        } else {
+          // Rafraîchir la liste des projets pour mettre à jour index_disponible
+          listerProjets().then((ps) => setProjets(ps)).catch(() => {});
+        }
+      };
+      setTimeout(poll, 2000);
+    } catch {}
+  }
 
   // Si un seul projet a un index et que la recherche sémantique s'active,
   // injecter automatiquement projet:nom dans la query
@@ -171,7 +202,6 @@ export default function PageRecherche() {
           projet: projetPourSemantic,
         });
         setResultats(data.resultats);
-        setIndexDispo(data.index_disponible);
         setRechercheFaite(true);
       } catch (err) {
         setErreur(err instanceof Error ? err.message : "Erreur de recherche");
@@ -257,59 +287,132 @@ export default function PageRecherche() {
           </div>
         )}
 
-        {/* ── Option sémantique — visible seulement si Ollama est up + au moins 1 index ── */}
-        {ollamaDisponible && projets.some((p) => p.index_disponible) && (
-          <div className="flex items-center gap-3 px-1">
-            <div className="relative group/semantic flex items-center gap-2">
-              <label className="flex items-center gap-2 text-sm text-[#1f2328] cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={semantic}
-                  onChange={(e) => setSemantic(e.target.checked)}
-                  className="rounded border-[#d0d7de] text-[#0969da]"
-                />
-                Recherche sémantique
-              </label>
-              {/* Icône info + tooltip */}
-              <span className="relative cursor-default">
-                <svg
-                  width="14" height="14" viewBox="0 0 16 16"
-                  fill="#6e7781"
-                  className="group-hover/semantic:fill-[#0969da] transition-colors"
-                  aria-hidden="true"
-                >
-                  <path d="M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8Zm8-6.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13ZM7.25 9.5V8.75a.75.75 0 0 1 1.5 0v.75h.25a.75.75 0 0 1 0 1.5h-2a.75.75 0 0 1 0-1.5h.25Zm1.5-3.75a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Z" />
-                </svg>
-                <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-30 opacity-0 group-hover/semantic:opacity-100 transition-opacity duration-150 w-64">
-                  <div className="bg-[#1f2328] text-white text-xs rounded-md px-3 py-2 shadow-lg leading-relaxed">
-                    Trouve des décisions <span className="text-[#7ee787]">sémantiquement proches</span> sans correspondance exacte des mots.{" "}
-                    Nécessite <code className="font-mono bg-[#ffffff20] px-1 rounded">teambrain index</code> dans le repo.
+        {/* ── Option sémantique — toujours visible, désactivée si conditions non remplies ── */}
+        {(() => {
+          const aUnIndex = projets.some((p) => p.index_disponible);
+          const actif = ollamaDisponible && aUnIndex;
+          return (
+            <div className="flex items-center gap-3 px-1">
+              <div className={`relative group/semantic flex items-center gap-2 ${!actif ? "opacity-50" : ""}`}>
+                <label className={`flex items-center gap-2 text-sm text-[#1f2328] select-none ${actif ? "cursor-pointer" : "cursor-not-allowed"}`}>
+                  <input
+                    type="checkbox"
+                    checked={semantic}
+                    disabled={!actif}
+                    onChange={(e) => setSemantic(e.target.checked)}
+                    className="rounded border-[#d0d7de] text-[#0969da] disabled:cursor-not-allowed"
+                  />
+                  Recherche sémantique
+                </label>
+                {/* Icône info + tooltip */}
+                <span className="relative cursor-default">
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="#6e7781"
+                    className="group-hover/semantic:fill-[#0969da] transition-colors" aria-hidden="true">
+                    <path d="M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8Zm8-6.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13ZM7.25 9.5V8.75a.75.75 0 0 1 1.5 0v.75h.25a.75.75 0 0 1 0 1.5h-2a.75.75 0 0 1 0-1.5h.25Zm1.5-3.75a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Z" />
+                  </svg>
+                  <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-30 opacity-0 group-hover/semantic:opacity-100 transition-opacity duration-150 w-64">
+                    <div className="bg-[#1f2328] text-white text-xs rounded-md px-3 py-2 shadow-lg leading-relaxed">
+                      {!ollamaDisponible ? (
+                        <><span className="text-[#f85149]">Ollama non disponible.</span> Lance <code className="font-mono bg-[#ffffff20] px-1 rounded">ollama serve</code> puis relance le serveur.</>
+                      ) : !aUnIndex ? (
+                        <><span className="text-[#d4a72c]">Aucun index construit.</span> Utilise le bouton <strong>Indexer</strong> ci-dessous pour chaque projet.</>
+                      ) : (
+                        <>Trouve des décisions <span className="text-[#7ee787]">sémantiquement proches</span> sans correspondance exacte des mots.</>
+                      )}
+                    </div>
+                    <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-[#1f2328]" />
                   </div>
-                  <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-[#1f2328]" />
-                </div>
-              </span>
+                </span>
+              </div>
+              {semantic && actif && projets.filter((p) => p.index_disponible).length > 1 && !query.match(/\bprojet:/i) && (
+                <span className="text-[#9a6700] text-xs bg-[#fff8c5] px-2 py-0.5 rounded-full border border-[#e3b341]">
+                  ajouter <code className="font-mono">projet:nom</code> dans la requête
+                </span>
+              )}
             </div>
-            {semantic && projets.filter((p) => p.index_disponible).length > 1 && !query.match(/\bprojet:/i) && (
-              <span className="text-[#9a6700] text-xs bg-[#fff8c5] px-2 py-0.5 rounded-full border border-[#e3b341]">
-                ajouter <code className="font-mono">projet:nom</code> dans la requête
-              </span>
-            )}
-          </div>
-        )}
+          );
+        })()}
       </form>
+
+      {/* ── Panneau d'indexation sémantique ── */}
+      {ollamaDisponible && projets.length > 0 && (
+        <details className="group" open={!projets.some((p) => p.index_disponible)}>
+          <summary className="flex items-center gap-2 cursor-pointer list-none select-none text-sm text-[#656d76] hover:text-[#1f2328] transition-colors py-1">
+            <svg
+              width="12" height="12" viewBox="0 0 16 16" fill="currentColor"
+              className="transition-transform group-open:rotate-90 shrink-0"
+              aria-hidden="true"
+            >
+              <path d="M6.22 3.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L9.94 8 6.22 4.28a.75.75 0 0 1 0-1.06Z" />
+            </svg>
+            Index sémantique
+            <span className="ml-1 text-xs text-[#6e7781]">
+              ({projets.filter((p) => p.index_disponible).length}/{projets.length} prêt{projets.filter(p => p.index_disponible).length !== 1 ? "s" : ""})
+            </span>
+          </summary>
+          <div className="mt-2 bg-white border border-[#d0d7de] rounded-md divide-y divide-[#d0d7de]">
+            {projets.map((p) => {
+              const s = indexStatuts[p.id];
+              const enCours = s?.statut === "en_cours";
+              const ok = p.index_disponible || s?.statut === "ok";
+              const erreurIndex = s?.statut === "erreur";
+              return (
+                <div key={p.id} className="flex items-center justify-between px-4 py-2.5 gap-3">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="font-mono text-xs text-[#6e7781] shrink-0">{p.id}</span>
+                    {/* Badge statut */}
+                    {enCours ? (
+                      <span className="inline-flex items-center gap-1 text-xs text-[#9a6700] bg-[#fff8c5] border border-[#e3b341] px-2 py-0.5 rounded-full">
+                        <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor" className="animate-spin" aria-hidden="true">
+                          <path d="M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0ZM1.5 8a6.5 6.5 0 1 1 13 0 6.5 6.5 0 0 1-13 0Z" opacity=".4"/>
+                          <path d="M8 0a8 8 0 0 1 8 8h-1.5a6.5 6.5 0 0 0-6.5-6.5V0Z"/>
+                        </svg>
+                        En cours…
+                      </span>
+                    ) : ok ? (
+                      <span className="inline-flex items-center gap-1 text-xs text-[#1a7f37] bg-[#dafbe1] border border-[#b5e9c0] px-2 py-0.5 rounded-full">
+                        <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                          <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"/>
+                        </svg>
+                        Indexé
+                        {s?.nb_adrs != null && <span className="opacity-70">— {s.nb_adrs} ADR</span>}
+                      </span>
+                    ) : erreurIndex ? (
+                      <span className="inline-flex items-center gap-1 text-xs text-[#d1242f] bg-[#ffebe9] border border-[#ffc1c0] px-2 py-0.5 rounded-full" title={s?.detail ?? ""}>
+                        <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                          <path d="M4.47.22A.749.749 0 0 1 5 0h6c.199 0 .389.079.53.22l4.25 4.25c.141.14.22.331.22.53v6a.749.749 0 0 1-.22.53l-4.25 4.25A.749.749 0 0 1 11 16H5a.749.749 0 0 1-.53-.22L.22 11.53A.749.749 0 0 1 0 11V5c0-.199.079-.389.22-.53Zm.84 1.28L1.5 5.31v5.38l3.81 3.81h5.38l3.81-3.81V5.31L10.69 1.5ZM8 4a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-3.5A.75.75 0 0 1 8 4Zm0 8a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z"/>
+                        </svg>
+                        Erreur
+                      </span>
+                    ) : (
+                      <span className="text-xs text-[#6e7781]">Pas d'index</span>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    disabled={enCours}
+                    onClick={() => demarrerIndex(p.id)}
+                    className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium border transition-colors disabled:opacity-40 disabled:cursor-not-allowed bg-white border-[#d0d7de] text-[#24292f] hover:bg-[#f6f8fa] hover:border-[#b6bcc2]"
+                  >
+                    {enCours ? (
+                      <><svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor" className="animate-spin" aria-hidden="true"><path d="M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0ZM1.5 8a6.5 6.5 0 1 1 13 0 6.5 6.5 0 0 1-13 0Z" opacity=".4"/><path d="M8 0a8 8 0 0 1 8 8h-1.5a6.5 6.5 0 0 0-6.5-6.5V0Z"/></svg>En cours</>
+                    ) : ok ? (
+                      <><svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M1.5 8a6.5 6.5 0 1 1 13 0 6.5 6.5 0 0 1-13 0ZM0 8a8 8 0 1 0 16 0A8 8 0 0 0 0 8Zm6.5 3.25a.75.75 0 0 0 1.5 0v-5.5a.75.75 0 0 0-1.5 0v5.5Z"/></svg>Ré-indexer</>
+                    ) : (
+                      <><svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 2a.75.75 0 0 1 .75.75v4.5h4.5a.75.75 0 0 1 0 1.5h-4.5v4.5a.75.75 0 0 1-1.5 0v-4.5h-4.5a.75.75 0 0 1 0-1.5h4.5v-4.5A.75.75 0 0 1 8 2Z"/></svg>Indexer</>
+                    )}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </details>
+      )}
 
       {/* ── Erreur ── */}
       {erreur && (
         <div className="bg-[#ffebe9] border border-[#d1242f]/30 text-[#d1242f] rounded-md px-4 py-3 text-sm">
           {erreur}
-        </div>
-      )}
-
-      {/* ── Avertissement index sémantique ── */}
-      {semantic && indexDispo === false && (
-        <div className="bg-[#fff8c5] border border-[#d4a72c] text-[#9a6700] rounded-md px-4 py-3 text-sm">
-          Index sémantique non disponible.{" "}
-          Lance <code className="font-mono bg-[#fff8c5] px-1 rounded">teambrain index</code> dans le repo concerné.
         </div>
       )}
 

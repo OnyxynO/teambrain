@@ -35,6 +35,13 @@ export interface HealthReponse {
   ollama_disponible: boolean;
 }
 
+export interface IndexStatut {
+  projet: string;
+  statut: "idle" | "en_cours" | "ok" | "erreur";
+  nb_adrs?: number;
+  detail?: string;
+}
+
 export interface Referentiels {
   modules: string[];
   statuts: string[];
@@ -134,6 +141,14 @@ export function modifierADR(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
+}
+
+export function getIndexStatut(projet: string): Promise<IndexStatut> {
+  return apiFetch(`/index/${projet}`);
+}
+
+export function lancerIndexation(projet: string): Promise<IndexStatut> {
+  return apiFetch(`/index/${projet}`, { method: "POST" });
 }
 
 export async function supprimerADR(projet: string, id: number): Promise<void> {
