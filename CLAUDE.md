@@ -329,3 +329,8 @@ Exemple pour un repo style Conventional Commits français (ex: SAND) :
 - **Playwright + `getByLabel` et labels avec span enfant** : un `<label>` contenant du texte + un `<span>` (ex: hint) ne se résout pas proprement via `getByLabel("texte")` sans `htmlFor`/`id`. Ajouter systématiquement `htmlFor` sur les labels et `id` sur les inputs/textareas des formulaires.
 - **Playwright + Next.js static export** : les liens générés par Next.js en mode `output: 'export'` ont un trailing slash (`/nouveau/` au lieu de `/nouveau`) — utiliser un matcher regex (`/\/nouveau/`) plutôt qu'une égalité stricte dans les assertions `toHaveAttribute("href", ...)`.
 - **Tests e2e avec données réelles** : créer les ADR de test via `request.post()` dans `beforeAll`/`beforeEach` et les supprimer dans `afterAll` — ne jamais dépendre d'un ID fixe du jeu de données réel (fragile si l'ADR est édité ou supprimé).
+
+**Refonte visuelle GitHub-style (2026-05-25)** :
+- **`overflow-hidden` sur un conteneur coupe les tooltips `absolute bottom-full`** (qui sortent vers le haut) — même avec `z-index` élevé. Fix : retirer `overflow-hidden` du conteneur parent, ajouter `rounded-t-md` sur le header et `last:rounded-b-md` sur les items de liste pour conserver les coins arrondis.
+- **Playwright `getByRole("link", { name: X })` fait une correspondance insensible à la casse et sous-chaîne** — "TeamBrain" (logo Nav, href="/") matche la recherche `{ name: "teambrain" }`. Toujours scoper avec `page.locator("main").getByRole(...)` pour éviter les faux positifs du logo dans la nav.
+- **Named groups Tailwind v4 (`group/tab-actifs`)** : bien supportés mais inutiles si l'ancêtre a `overflow-hidden` — le tooltip n'est pas rendu visible même si les classes CSS sont présentes.
