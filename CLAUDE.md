@@ -106,6 +106,8 @@ teambrain ui --base /path/to/projets/          # auto-détection
 - **README v1.0 + version bump (2026-05-22)** : ✅ README complet, version 1.0.0 dans pyproject.toml.
 - **Décision UI (2026-05-22)** : `teambrain ui` passera de `webbrowser.open()` → **PyWebView** (fenêtre native WebKit). Séquence : (1) modifs UI sur le frontend Next.js d'abord, (2) intégration PyWebView. Publication v1.0.0 après.
 - **Module 7 — Édition/suppression (2026-05-23)** : ✅ Tous les champs d'un ADR sont éditables depuis l'interface web. Suppression avec confirmation en ligne. `DELETE /adr/{projet}/{adr_id}` ajouté à l'API. 116 tests Python (+ 9), 19 tests Playwright e2e (nouveau).
+- **Recherche GitHub-style (2026-05-25)** : ✅ Syntaxe qualificatifs (`statut:`, `module:`, `decideur:`, `projet:`, `in:`), phrases exactes, regex, exclusions `-terme`. `parse_query()` + `search_adrs()` côté backend. Badges visuels live + panneau aide syntaxe côté frontend.
+- **Recherche sémantique UI (2026-05-25)** : ✅ Checkbox toujours visible (désactivée avec tooltip si Ollama absent ou aucun index). Panneau "Index sémantique" collapsible par projet : statut badge (Indexé/En cours/Erreur), boutons Indexer/Ré-indexer, polling 2s. `POST /index/{projet}` (async thread) + `GET /index/{projet}`. `/projects` expose `index_disponible`. `/health` expose `ollama_disponible`.
 
 ## Roadmap — prochaines évolutions
 
@@ -334,6 +336,13 @@ Exemple pour un repo style Conventional Commits français (ex: SAND) :
 - **Redémarrage serveur obligatoire** après modification de `adr.py` ou `http_api.py` — Python charge les modules en mémoire au démarrage, `pip install -e .` (editable) ne suffit pas. Killer le PID et relancer `teambrain ui`.
 - `parse_query()` est appelé dans `http_api.py` pour extraire `projet:X` de la query et l'utiliser comme filtre de projet avant d'appeler `search_adrs`. Passer `req=` à `search_adrs` évite le double parsing.
 - `search_adrs` avec uniquement des qualificatifs (sans termes full-text) retourne `score=1.0` — c'est le comportement voulu pour `statut:accepte` seul.
+
+**Recherche sémantique + indexation UI (2026-05-25)** :
+- `POST /index/{projet}` lance `reindex()` dans `loop.run_in_executor(None, ...)` pour ne pas bloquer l'event loop FastAPI. L'état est stocké dans `_index_statuts` dict en mémoire (reset au redémarrage du serveur).
+- `_index_statuts` est initialisé à `statut="ok"` si `teambrain.db` existe déjà, sinon `"idle"` — évite un faux "Pas d'index" au premier chargement.
+- Polling côté frontend : `setTimeout` récursif toutes les 2s tant que `statut === "en_cours"`, avec auto-refresh de `/projects` quand la tâche se termine (pour mettre à jour `index_disponible`).
+- `fastapi` n'est pas installé dans le Python système (`/opt/homebrew/lib/python3.14`) — le binaire `teambrain` utilise `/opt/homebrew/opt/python@3.14/bin/python3.14`. Installer les deps avec `/opt/homebrew/opt/python@3.14/bin/pip3 install "fastapi[standard]~=0.115" --break-system-packages`.
+- La checkbox sémantique reste toujours dans le DOM (même désactivée) — `opacity-50 cursor-not-allowed` communique l'état sans retirer la feature de la vue.
 
 **Refonte visuelle GitHub-style (2026-05-25)** :
 - **`overflow-hidden` sur un conteneur coupe les tooltips `absolute bottom-full`** (qui sortent vers le haut) — même avec `z-index` élevé. Fix : retirer `overflow-hidden` du conteneur parent, ajouter `rounded-t-md` sur le header et `last:rounded-b-md` sur les items de liste pour conserver les coins arrondis.
