@@ -209,10 +209,10 @@ function ListeADR() {
       {chargement ? (
         <div className="text-center py-16 text-[#656d76] text-sm">Chargement…</div>
       ) : (
-        <div className="bg-white border border-[#d0d7de] rounded-md overflow-hidden">
+        <div className="bg-white border border-[#d0d7de] rounded-md">
 
           {/* ── Tabs + sort ── */}
-          <div className="flex items-center border-b border-[#d0d7de] px-4 bg-[#f6f8fa]">
+          <div className="flex items-center border-b border-[#d0d7de] px-4 bg-[#f6f8fa] rounded-t-md">
 
             {/* Onglet Actifs */}
             <div className="relative group/tab-actifs">
@@ -311,7 +311,7 @@ function ListeADR() {
               {adrsAffichés.map((adr) => (
                 <li
                   key={`${adr.projet}-${adr.id}`}
-                  className="flex items-start gap-3 px-4 py-3 hover:bg-[#f6f8fa] transition-colors"
+                  className="flex items-start gap-3 px-4 py-3 hover:bg-[#f6f8fa] transition-colors first:rounded-t-none last:rounded-b-md"
                 >
                   {/* Icône statut */}
                   <span className="mt-0.5 shrink-0">
