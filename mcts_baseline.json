@@ -1,0 +1,76 @@
+{
+  "target": "src/teambrain/server.py",
+  "tools": {
+    "search_decisions": {
+      "description": "Recherche s\u00e9mantique dans les ADR de l'\u00e9quipe.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string"
+          },
+          "module": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "query"
+        ]
+      },
+      "source_file": "/Users/seb/Documents/Claude projet/projets/projectmatch/teambrain/src/teambrain/server.py",
+      "source_line": 39,
+      "hash": "f0bacf4db4c90becd5fb124f068e82abfd160a3254db9ace27cbb2720a141267"
+    },
+    "get_decision": {
+      "description": "R\u00e9cup\u00e8re le contenu complet d'un ADR par son ID.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "source_file": "/Users/seb/Documents/Claude projet/projets/projectmatch/teambrain/src/teambrain/server.py",
+      "source_line": 52,
+      "hash": "91bbd4c8cc00a1371cbcc9e6648e4e2c82f24386b05ebc2f03d665305fe1924f"
+    },
+    "list_decisions": {
+      "description": "Liste les ADR, optionnellement filtr\u00e9s par module ou statut.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "module": {
+            "type": "string"
+          },
+          "statut": {
+            "type": "string"
+          }
+        }
+      },
+      "source_file": "/Users/seb/Documents/Claude projet/projets/projectmatch/teambrain/src/teambrain/server.py",
+      "source_line": 60,
+      "hash": "70fdba4b0be166471132dd05c085c4f247ebb35f23581d08ba8dae17d5adfd84"
+    },
+    "get_context_for_file": {
+      "description": "Retourne les ADR pertinents pour un fichier ou chemin donn\u00e9.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "filepath": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "filepath"
+        ]
+      },
+      "source_file": "/Users/seb/Documents/Claude projet/projets/projectmatch/teambrain/src/teambrain/server.py",
+      "source_line": 108,
+      "hash": "5f56ea7b1c7141f6e2a5997f73992ef134b2ecae4504108a6e8c5d07009cf11e"
+    }
+  }
+}

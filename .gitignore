@@ -14,3 +14,4 @@ src/teambrain/static/
 teambrain-web/out/
 teambrain-web/.next/
 test-results/
+mcts_analysis/
