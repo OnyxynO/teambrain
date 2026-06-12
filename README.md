@@ -1,5 +1,9 @@
 # TeamBrain
 
+[![PyPI](https://img.shields.io/pypi/v/teambrain.svg)](https://pypi.org/project/teambrain/)
+[![Python](https://img.shields.io/pypi/pyversions/teambrain.svg)](https://pypi.org/project/teambrain/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 **Mémoire décisionnelle d'équipe, git-native.**
 
 TeamBrain capture et retrouve les décisions d'architecture (ADR) directement dans ton repo git — avec une interface web, un serveur MCP pour les agents IA, et un bot Slack optionnel.
@@ -73,7 +77,7 @@ pip install "teambrain[http]"
 # 1. Initialise TeamBrain dans le repo courant
 teambrain init
 
-# 2. Lance l'interface web (API + UI dans le navigateur)
+# 2. Lance l'interface web (fenêtre native PyWebView ou navigateur avec --browser)
 teambrain ui
 
 # 3. Ou crée un ADR depuis le terminal
@@ -141,7 +145,7 @@ teambrain bot --check                   # vérifie les tokens et la présence da
 
 ## Interface web
 
-`teambrain ui` ouvre `http://localhost:8003` dans le navigateur.
+`teambrain ui` ouvre une fenêtre native PyWebView (WebKit sur macOS) pointée sur `http://localhost:8003`. Avec `--browser`, retombe sur le navigateur système.
 
 **Fonctionnalités :**
 - Liste paginée des ADR avec filtres (statut, module)
@@ -331,8 +335,8 @@ Les fichiers sont versionnés avec git — l'historique et les `git blame` sont 
 git clone https://github.com/OnyxynO/teambrain
 cd teambrain
 
-pip install -e ".[dev,http,bot]"
-pytest                    # 107 tests
+pip install -e ".[dev,http,bot,desktop]"
+pytest                    # 116 tests Python (+ 19 Playwright e2e dans teambrain-web/)
 
 # Interface web (développement)
 cd teambrain-web
