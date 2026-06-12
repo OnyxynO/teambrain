@@ -157,6 +157,8 @@ teambrain bot --check                   # vérifie les tokens et la présence da
 
 **Accès équipe :** le tech lead lance `teambrain ui`, les collègues accèdent via l'IP locale ou un SSH forward. Aucune authentification — réseau local de confiance.
 
+> ⚠️ **Note sécurité** — Par défaut, l'API HTTP écoute uniquement sur `127.0.0.1` et CORS est ouvert (`*`) pour faciliter le développement local. Exposer le service via `--host 0.0.0.0` rend l'API joignable par tout client du réseau, sans authentification ni restriction d'origine. À réserver à un réseau de confiance, ou à placer derrière un reverse proxy (auth + TLS).
+
 ---
 
 ## Sans Ollama
