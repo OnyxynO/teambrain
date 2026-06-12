@@ -9,7 +9,7 @@
 TeamBrain capture et retrouve les décisions d'architecture (ADR) directement dans ton repo git — avec une interface web, un serveur MCP pour les agents IA, et un bot Slack optionnel.
 
 ```
-pip install teambrain
+pip install "teambrain[desktop]"
 teambrain init
 teambrain ui
 ```
@@ -46,28 +46,30 @@ Sans Ollama : `teambrain add`, `teambrain search` et `teambrain ui` fonctionnent
 
 ## Installation
 
-**Core (CLI + interface web + MCP) :**
+**Core (CLI + MCP stdio) :**
 ```bash
 pip install teambrain
 ```
+Couvre : `init`, `add`, `list`, `search`, `show`, `index`, `serve` (MCP), `scan-commits`, `scan-code`, `setup`.
 
-**Avec une fenêtre native (PyWebView, recommandé pour `teambrain ui`) :**
+**Interface web — fenêtre native PyWebView (recommandé) :**
 ```bash
 pip install "teambrain[desktop]"
 ```
+Ajoute FastAPI + PyWebView. Active `teambrain ui` (fenêtre native WebKit) et `teambrain serve --http`.
+
+**Interface web — navigateur seulement :**
+```bash
+pip install "teambrain[http]"
+```
+Ajoute FastAPI. Active `teambrain ui --browser` et `teambrain serve --http`. Pas de fenêtre native.
 
 **Avec le bot Slack :**
 ```bash
 pip install "teambrain[bot]"
 ```
 
-**Avec les dépendances HTTP (si tu utilises `teambrain serve --http` seul) :**
-```bash
-pip install "teambrain[http]"
-```
-
-> `teambrain ui` embarque déjà tout ce qu'il faut — pas besoin de `[http]` séparément.
-> Sans l'extra `[desktop]`, lance `teambrain ui --browser` pour ouvrir dans le navigateur système.
+Les extras se cumulent : `pip install "teambrain[desktop,bot]"`.
 
 ---
 

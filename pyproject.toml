@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "teambrain"
-version = "1.0.1"
+version = "1.0.2"
 description = "Mémoire décisionnelle d'équipe, git-native. CLI + interface web + serveur MCP pour capturer, indexer et consulter les ADR depuis n'importe quel agent IA."
 readme = "README.md"
 requires-python = ">=3.13"
@@ -46,7 +46,7 @@ slack = ["slack-sdk~=3.30"]
 github = ["PyGithub~=2.0"]
 bot = ["slack-sdk~=3.30", "PyGithub~=2.0"]
 http = ["fastapi[standard]~=0.115"]
-desktop = ["pywebview~=5.4"]
+desktop = ["fastapi[standard]~=0.115", "pywebview~=5.4"]
 dev = ["pytest>=9.0.3", "pytest-cov", "httpx~=0.27"]
 
 [project.scripts]
