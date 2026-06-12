@@ -15,6 +15,7 @@
 | Module 5 — Scanner sémantique | ✅ livré | `--semantic` sur `scan-commits`, sqlite-vec cosine |
 | Audit sécurité/qualité | ✅ livré | 14 corrections (injection, permissions, threading) |
 | Module 6 — Interface web | ✅ livré | API REST FastAPI + frontend Next.js 16, multi-projets, /nouveau adaptatif Ollama |
+| PyWebView — fenêtre native | ✅ livré (2026-06-12) | `teambrain ui` en WebKit natif, fallback `--browser`, extra `[desktop]` |
 | **Publication v1.0** | 🔜 priorité | Packaging, distribution, README quick start — voir section dédiée |
 
 ---

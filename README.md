@@ -47,6 +47,11 @@ Sans Ollama : `teambrain add`, `teambrain search` et `teambrain ui` fonctionnent
 pip install teambrain
 ```
 
+**Avec une fenêtre native (PyWebView, recommandé pour `teambrain ui`) :**
+```bash
+pip install "teambrain[desktop]"
+```
+
 **Avec le bot Slack :**
 ```bash
 pip install "teambrain[bot]"
@@ -58,6 +63,7 @@ pip install "teambrain[http]"
 ```
 
 > `teambrain ui` embarque déjà tout ce qu'il faut — pas besoin de `[http]` séparément.
+> Sans l'extra `[desktop]`, lance `teambrain ui --browser` pour ouvrir dans le navigateur système.
 
 ---
 
@@ -99,7 +105,8 @@ teambrain search "authentification"     # recherche plein texte
 ### Interface web
 
 ```bash
-teambrain ui                            # lance API + UI sur http://localhost:8003
+teambrain ui                            # fenêtre native PyWebView (port 8003)
+teambrain ui --browser                  # ouverture dans le navigateur système
 teambrain ui --repo /chemin/vers/repo   # repo spécifique
 teambrain ui --repo /repo1 --repo /repo2  # multi-projets
 teambrain ui --base /dossier/projets    # tous les repos du dossier

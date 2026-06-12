@@ -85,7 +85,8 @@ teambrain scan-code --no-ai                     # matchs bruts sans scoring Olla
 
 # Interface web bundlée (Option B)
 bash scripts/build_frontend.sh                 # build Next.js → src/teambrain/static/ (avant pip install)
-teambrain ui                                   # API + UI + ouverture navigateur (port 8003)
+teambrain ui                                   # API + UI dans une fenêtre PyWebView native (port 8003)
+teambrain ui --browser                         # fallback : ouverture dans le navigateur système
 teambrain ui --repo /path/sand --repo /path/tb # multi-projets
 teambrain ui --base /path/to/projets/          # auto-détection
 ```
@@ -105,6 +106,7 @@ teambrain ui --base /path/to/projets/          # auto-détection
 - **Audit sécurité (2026-05-22)** : ✅ 7 corrections — path traversal serve_static, starlette 1.0.1, host 127.0.0.1, /health info disclosure, max_length draft, écriture atomique MCP setup, pytest 9.0.3.
 - **README v1.0 + version bump (2026-05-22)** : ✅ README complet, version 1.0.0 dans pyproject.toml.
 - **Décision UI (2026-05-22)** : `teambrain ui` passera de `webbrowser.open()` → **PyWebView** (fenêtre native WebKit). Séquence : (1) modifs UI sur le frontend Next.js d'abord, (2) intégration PyWebView. Publication v1.0.0 après.
+- **PyWebView intégré (2026-06-12)** : ✅ `teambrain ui` ouvre une fenêtre native WebKit via PyWebView (extra `.[desktop]`). Uvicorn tourne dans un thread daemon (`uvicorn.Server` + `should_exit`), `webview.start()` bloque sur le main thread (requis macOS). Flag `--browser` pour retomber sur `webbrowser.open()`. Aucune nouvelle dépendance core : pywebview reste optionnel.
 - **Module 7 — Édition/suppression (2026-05-23)** : ✅ Tous les champs d'un ADR sont éditables depuis l'interface web. Suppression avec confirmation en ligne. `DELETE /adr/{projet}/{adr_id}` ajouté à l'API. 116 tests Python (+ 9), 19 tests Playwright e2e (nouveau).
 - **Recherche GitHub-style (2026-05-25)** : ✅ Syntaxe qualificatifs (`statut:`, `module:`, `decideur:`, `projet:`, `in:`), phrases exactes, regex, exclusions `-terme`. `parse_query()` + `search_adrs()` côté backend. Badges visuels live + panneau aide syntaxe côté frontend.
 - **Recherche sémantique UI (2026-05-25)** : ✅ Checkbox toujours visible (désactivée avec tooltip si Ollama absent ou aucun index). Panneau "Index sémantique" collapsible par projet : statut badge (Indexé/En cours/Erreur), boutons Indexer/Ré-indexer, polling 2s. `POST /index/{projet}` (async thread) + `GET /index/{projet}`. `/projects` expose `index_disponible`. `/health` expose `ollama_disponible`.

@@ -293,11 +293,16 @@ def ui(
     base: str = typer.Option("", "--base", help="Dossier parent — détecte tous les .decisions/"),
     port: int = typer.Option(8003, "--port", help="Port du serveur"),
     host: str = typer.Option("127.0.0.1", "--host", help="Interface d'écoute"),
+    browser: bool = typer.Option(False, "--browser", help="Ouvrir dans le navigateur au lieu d'une fenêtre native"),
 ):
     """Lance l'interface web TeamBrain (API + frontend intégré).
 
+    Par défaut, ouvre une fenêtre native via PyWebView (extra .desktop).
+    Avec `--browser`, retombe sur l'ouverture du navigateur système.
+
     Exemple :
       teambrain ui
+      teambrain ui --browser
       teambrain ui --repo /path/sand --repo /path/teambrain
       teambrain ui --base /path/to/projets/
     """
@@ -315,23 +320,54 @@ def ui(
         err.print("[red]uvicorn non installé.[/red] Lance : pip install -e '.[http]'")
         raise typer.Exit(1)
 
-    import threading
-    import webbrowser
-
     from .http_api import create_app
 
     projets = _resoudre_projets(repo, base)
-    console.print(f"[green]▶[/green] TeamBrain — [cyan]http://localhost:{port}[/cyan]")
+    url = f"http://localhost:{port}"
+    console.print(f"[green]▶[/green] TeamBrain — [cyan]{url}[/cyan]")
     for nom, d in projets.items():
         console.print(f"[dim]  {nom} → {d}[/dim]")
 
-    def _open():
-        import time
-        time.sleep(1.2)
-        webbrowser.open(f"http://localhost:{port}")
+    api = create_app(projets, static_dir=static_dir)
 
-    threading.Thread(target=_open, daemon=True).start()
-    uvicorn.run(create_app(projets, static_dir=static_dir), host=host, port=port)
+    # Mode fallback navigateur : uvicorn bloquant sur le main thread
+    if browser:
+        import threading
+        import time
+        import webbrowser
+
+        def _open():
+            time.sleep(1.2)
+            webbrowser.open(url)
+
+        threading.Thread(target=_open, daemon=True).start()
+        uvicorn.run(api, host=host, port=port)
+        return
+
+    # Mode natif : pywebview doit tourner sur le main thread (macOS), uvicorn en arrière-plan
+    try:
+        import webview
+    except ImportError:
+        err.print(
+            "[red]pywebview non installé.[/red] Choisis :\n"
+            "  [dim]pip install -e '.[desktop]'[/dim] (fenêtre native)\n"
+            "  ou relance avec [dim]--browser[/dim]"
+        )
+        raise typer.Exit(1)
+
+    import threading
+
+    config = uvicorn.Config(api, host=host, port=port, log_level="warning")
+    server = uvicorn.Server(config)
+    thread = threading.Thread(target=server.run, daemon=True)
+    thread.start()
+
+    try:
+        webview.create_window("TeamBrain", url, width=1280, height=800)
+        webview.start()
+    finally:
+        server.should_exit = True
+        thread.join(timeout=3)
 
 
 @app.command()
