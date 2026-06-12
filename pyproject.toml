@@ -5,15 +5,41 @@ build-backend = "hatchling.build"
 [project]
 name = "teambrain"
 version = "1.0.0"
+description = "Mémoire décisionnelle d'équipe, git-native. CLI + interface web + serveur MCP pour capturer, indexer et consulter les ADR depuis n'importe quel agent IA."
+readme = "README.md"
 requires-python = ">=3.13"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [
+    { name = "Sébastien Etievant", email = "etievant.sebastien@protonmail.com" },
+]
+keywords = ["adr", "architecture-decision-record", "mcp", "team-memory", "ollama", "knowledge-management"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Documentation",
+    "Topic :: Software Development :: Version Control :: Git",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Environment :: Console",
+    "Environment :: Web Environment",
+]
 dependencies = [
-    "typer[all]~=0.12",
+    "typer~=0.12",
     "ollama~=0.4",
     "python-frontmatter~=1.1",
     "rich~=13.0",
     "sqlite-vec~=0.1",
     "mcp~=1.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/OnyxynO/teambrain"
+Repository = "https://github.com/OnyxynO/teambrain"
+Issues = "https://github.com/OnyxynO/teambrain/issues"
+Changelog = "https://github.com/OnyxynO/teambrain/releases"
 
 [project.optional-dependencies]
 slack = ["slack-sdk~=3.30"]
@@ -28,9 +54,21 @@ teambrain = "teambrain.cli:app"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/teambrain"]
-artifacts = [
-  "src/teambrain/static/**",
+
+[tool.hatch.build.targets.wheel.force-include]
+"src/teambrain/static" = "teambrain/static"
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "src/teambrain",
+  "scripts/build_frontend.sh",
+  "README.md",
+  "LICENSE",
+  "pyproject.toml",
 ]
+
+[tool.hatch.build.targets.sdist.force-include]
+"src/teambrain/static" = "src/teambrain/static"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
