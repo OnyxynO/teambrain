@@ -2,6 +2,7 @@
 
 [![PyPI](https://img.shields.io/pypi/v/teambrain.svg)](https://pypi.org/project/teambrain/)
 [![Python](https://img.shields.io/pypi/pyversions/teambrain.svg)](https://pypi.org/project/teambrain/)
+[![Downloads](https://static.pepy.tech/badge/teambrain)](https://pepy.tech/project/teambrain)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 **Mémoire décisionnelle d'équipe, git-native.**
