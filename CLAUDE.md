@@ -9,7 +9,7 @@ Roadmap : `ROADMAP.md`
 ## Stack
 
 **Core** :
-- Python 3.13 + hatchling
+- Python 3.14 (dev) + hatchling — `requires-python >=3.13` conservé pour ne pas exclure les installs PyPI en 3.13
 - typer[all] + rich — CLI
 - ollama — génération brouillons (qwen3:1.7b) + embeddings (qwen3-embedding:0.6b)
 - python-frontmatter — parsing/écriture des fichiers ADR
