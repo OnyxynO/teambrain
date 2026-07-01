@@ -60,7 +60,7 @@ pip install -e ".[dev]"        # core + dev deps
 pip install -e ".[bot]"        # core + slack-sdk + PyGithub (pour Module 3)
 
 # Tests
-pytest                         # 78 tests
+pytest                         # 116 tests Python (+ 19 Playwright e2e)
 
 # CLI
 teambrain init                 # crée .decisions/ dans le repo courant
