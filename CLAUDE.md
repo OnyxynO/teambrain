@@ -2,6 +2,8 @@
 
 @../../../PRINCIPES.md
 
+@../CLAUDE.md
+
 ADR git-natif + MCP server mémoire décisionnelle d'équipe.
 Spec complète : `../../../_ideas/TeamBrain/PROPOSITION.md`
 Roadmap : `ROADMAP.md`
