@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "teambrain"
-version = "1.0.2"
+version = "1.0.3"
 description = "Mémoire décisionnelle d'équipe, git-native. CLI + interface web + serveur MCP pour capturer, indexer et consulter les ADR depuis n'importe quel agent IA."
 readme = "README.md"
 requires-python = ">=3.13"
