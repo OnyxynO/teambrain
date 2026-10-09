@@ -1,0 +1,48 @@
+name: Audit des dépendances (bun)
+
+# Dependabot ne voit pas les dépendances transitives de bun.lock : `bun audit` est le seul
+# contrôle fiable (mesure du 2026-10-09 : 10 projets sur 20 avaient des failles invisibles).
+# Workflow séparé du déploiement : une nouvelle advisory met la CI en rouge sans bloquer un
+# correctif urgent. Hebdomadaire, car une faille apparaît sans qu'aucun commit ne change ;
+# le jeudi, pour que la revue GitHub de vigie la remonte au triage du vendredi.
+# Modèle : _templates/audit-bun.yml (workspace ouroboros).
+on:
+  push:
+    branches: [main]
+    paths: ['**/bun.lock', '**/package.json', '.github/workflows/audit-bun.yml']
+  pull_request:
+    paths: ['**/bun.lock', '**/package.json', '.github/workflows/audit-bun.yml']
+  schedule:
+    - cron: '0 6 * * 4'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: bun audit (${{ matrix.dossier }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - dossier: teambrain-web
+            ignore: ''
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.4.2
+      # Lit seulement bun.lock : aucun `bun install`, donc aucun script de paquet exécuté.
+      # Seuil high ; toute exception est déclarée dans la matrice, avec sa justification.
+      - name: bun audit --audit-level=high
+        working-directory: ${{ matrix.dossier }}
+        env:
+          IGNORE: ${{ matrix.ignore }}
+        run: |
+          args=""
+          for id in $IGNORE; do args="$args --ignore=$id"; done
+          bun audit --audit-level=high $args
