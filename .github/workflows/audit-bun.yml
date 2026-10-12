@@ -35,7 +35,7 @@ jobs:
           persist-credentials: false
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
-          bun-version: 1.4.2
+          bun-version-file: .bun-version
       # Lit seulement bun.lock : aucun `bun install`, donc aucun script de paquet exécuté.
       # Seuil high ; toute exception est déclarée dans la matrice, avec sa justification.
       - name: bun audit --audit-level=high
