@@ -10,6 +10,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
+from . import __version__
 from .adr import ADR, delete_adr, list_adrs, next_id, parse_query, save_adr, search_adrs
 from .ai import generate_draft
 from .config import load_config
@@ -98,7 +99,7 @@ def create_app(projets: dict[str, Path], static_dir: Path | None = None) -> Fast
     async def lifespan(app: FastAPI):
         yield
 
-    app = FastAPI(title="TeamBrain API", version="1.0.0", lifespan=lifespan)
+    app = FastAPI(title="TeamBrain API", version=__version__, lifespan=lifespan)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
