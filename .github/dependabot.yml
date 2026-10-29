@@ -1,0 +1,25 @@
+# Mises à jour de dépendances automatiques du frontend.
+# Écosystème `bun` (et non `npm`) : sans ce fichier, les mises à jour de sécurité de GitHub
+# prennent `npm_and_yarn` par défaut, qui refuse un dossier n'ayant qu'un `bun.lock`
+# (erreur `misconfigured_tooling`). Les majeures restent à valider à la main.
+version: 2
+updates:
+  - package-ecosystem: "bun"
+    directory: "/teambrain-web"
+    schedule:
+      interval: "weekly"
+      day: "friday"
+    # Délai de 3 jours après publication (règle workspace) — ne s'applique qu'aux mises à
+    # jour de version, pas aux correctifs de sécurité.
+    cooldown:
+      default-days: 3
+    open-pull-requests-limit: 10
+    groups:
+      # `dependency-type` n'est pas pris en charge par l'écosystème bun : regroupement par
+      # type de mise à jour seulement.
+      mineures:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
